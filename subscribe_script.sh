@@ -1,17 +1,13 @@
 #!/bin/bash
 
-# Check for correct number of arguments
-if [ "$#" -ne 4 ]; then
-    echo "Usage: $0 address userName apiKey threshold"
-    exit 1
-fi
+# Assuming apiKey and address are passed as command line arguments
+apiKey=$1
+address=$2
 
-# Start timer
-start_time=$(date +%s)
+apiUrl="https://sentry.aleno.ai"
 
-# Dependency check for jq
-if ! command -v jq &> /dev/null
-then
+# Check and install jq if necessary
+if ! command -v jq &> /dev/null; then
     echo "jq could not be found. Attempting to install jq..."
     sudo apt-get update
     sudo apt-get install -y jq
@@ -20,55 +16,54 @@ else
     echo "jq is already installed. Continuing..."
 fi
 
-# Assigning input arguments to variables
-address="$1"
-userName="$2"
-apiKey="$3"
-threshold="$4" # Threshold is now a parameter
-apiUrl="https://sentry.aleno.ai"
-
-# Initialize counter for metric subscriptions
-metric_subscriptions_count=0
-
-# Step 0: Create a user and get userId
-echo "Creating user: $userName"
-userResponse=$(curl -s -X POST "${apiUrl}/users" \
-    -H 'accept: application/json' \
-    -H "Authorization: ${apiKey}" \
-    -H 'Content-Type: application/json' \
-    -d "{\"users\": [{ \"userName\": \"$userName\" }]}")
-
-userId=$(echo "$userResponse" | jq -r '.data[0].id')
-echo "User created with userId: $userId"
-
-if [ -z "$userId" ] || [ "$userId" == "null" ]; then
-    echo "Failed to create user or extract userId."
-    exit 1
+# Check and install bc if necessary
+if ! command -v bc &> /dev/null; then
+    echo "bc could not be found. Attempting to install bc..."
+    sudo apt-get update
+    sudo apt-get install -y bc
+    echo "bc installed successfully."
+else
+    echo "bc is already installed. Continuing..."
 fi
 
-echo "Fetching metrics for address: $address"
 response=$(curl -s -X GET "${apiUrl}/suggestions?addresses=${address}" -H "Authorization: ${apiKey}")
 
-if echo "$response" | jq -e '.data.metrics[]?' > /dev/null; then
-    subscriptions=$(echo "$response" | jq -c '[.data.metrics[] | {userId: "'$userId'", metricKey: .key, threshold: '$threshold'}]')
-    metric_subscriptions_count=$(echo "$subscriptions" | jq length)
+# Process tokens not in pools (Tokens in Wallet)
+echo "Available metrics:"
+echo ""
+echo "Tokens in Wallet"
+walletTokens=$(echo "$response" | jq -r '.data.metrics[] | select(.info.pool == null) | .info.token.address' | uniq)
+for token in $walletTokens; do
+    tokenData=$(echo "$response" | jq -r --arg address "$token" '.data.metrics[] | select(.info.token.address==$address and .info.pool == null)')
+    tokenName=$(echo "$tokenData" | jq -r '.info.token.name' | uniq)
+    usdAmount=$(echo "$response" | jq -r --arg address "$token" '.data.supportedAssets[] | select(.tokenAddress==$address) | .usdAmount')
     
-    echo "Subscribing to $metric_subscriptions_count metrics with threshold: $threshold"
-    subscriptionResponse=$(curl -s -X POST "${apiUrl}/subscriptions" \
-             -H 'accept: application/json' \
-             -H "Authorization: ${apiKey}" \
-             -d "{\"subscriptions\": $subscriptions}")
-    echo "$subscriptionResponse" | jq '.'
-else
-    echo "Error: Invalid or unexpected API response."
-fi
+    if [[ ! -z "$usdAmount" && "$usdAmount" != "null" ]]; then
+        echo "$tokenName usdAmount: $usdAmount"
+    else
+        echo "$tokenName is unsupported"
+    fi
+    
+    echo "$tokenData" | jq -r '.name' | uniq
+done
+echo "---"
 
-# Execution time calculation
-end_time=$(date +%s)
-execution_time=$((end_time - start_time))
-
-echo "Process completed."
-echo "Execution time: $execution_time seconds."
-echo "Number of metric keys subscribed: $metric_subscriptions_count."
-echo "Reminder: The userId used for subscriptions was $userId."
-
+# Process Other available tokens in pools
+echo "Other available tokens"
+poolTokens=$(echo "$response" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.token.address' | uniq)
+for token in $poolTokens; do
+    if [[ ! " ${walletTokens[@]} " =~ " ${token} " ]]; then
+        tokenData=$(echo "$response" | jq -r --arg address "$token" '.data.metrics[] | select(.info.token.address==$address and .info.pool != null)')
+        tokenName=$(echo "$tokenData" | jq -r '.info.token.name' | uniq)
+        usdAmount=$(echo "$response" | jq -r --arg address "$token" '.data.supportedAssets[] | select(.tokenAddress==$address) | .usdAmount')
+        
+        if [[ ! -z "$usdAmount" && "$usdAmount" != "null" ]]; then
+            echo "$tokenName usdAmount: $usdAmount"
+        else
+            echo "$tokenName is unsupported"
+        fi
+        
+        echo "$tokenData" | jq -r '.name' | uniq
+        echo "---"
+    fi
+done
