@@ -4,66 +4,62 @@
 apiKey=$1
 address=$2
 
-apiUrl="https://sentry.aleno.ai"
+apiUrl="https://sentry.aleno.ai/suggestions?addresses=$address"
 
-# Check and install jq if necessary
-if ! command -v jq &> /dev/null; then
-    echo "jq could not be found. Attempting to install jq..."
-    sudo apt-get update
-    sudo apt-get install -y jq
-    echo "jq installed successfully."
-else
-    echo "jq is already installed. Continuing..."
-fi
+# Ensure jq and bc are installed
+for tool in jq bc; do
+    if ! command -v $tool &> /dev/null; then
+        echo "$tool could not be found. Attempting to install $tool..."
+        sudo apt-get update && sudo apt-get install -y $tool
+    else
+        echo "$tool is already installed. Continuing..."
+    fi
+done
 
-# Check and install bc if necessary
-if ! command -v bc &> /dev/null; then
-    echo "bc could not be found. Attempting to install bc..."
-    sudo apt-get update
-    sudo apt-get install -y bc
-    echo "bc installed successfully."
-else
-    echo "bc is already installed. Continuing..."
-fi
+response=$(curl -s -X GET "$apiUrl" -H "Authorization: $apiKey")
 
-response=$(curl -s -X GET "${apiUrl}/suggestions?addresses=${address}" -H "Authorization: ${apiKey}")
-
-# Process tokens not in pools (Tokens in Wallet)
 echo "Available metrics:"
-echo ""
-echo "Tokens in Wallet"
+echo "----------"
+echo "On tokens in Wallet:"
+# Tokens in Wallet
 walletTokens=$(echo "$response" | jq -r '.data.metrics[] | select(.info.pool == null) | .info.token.address' | uniq)
 for token in $walletTokens; do
-    tokenData=$(echo "$response" | jq -r --arg address "$token" '.data.metrics[] | select(.info.token.address==$address and .info.pool == null)')
-    tokenName=$(echo "$tokenData" | jq -r '.info.token.name' | uniq)
-    usdAmount=$(echo "$response" | jq -r --arg address "$token" '.data.supportedAssets[] | select(.tokenAddress==$address) | .usdAmount')
-    
-    if [[ ! -z "$usdAmount" && "$usdAmount" != "null" ]]; then
-        echo "$tokenName usdAmount: $usdAmount"
-    else
-        echo "$tokenName is unsupported"
-    fi
-    
-    echo "$tokenData" | jq -r '.name' | uniq
-done
-echo "---"
+    tokenMetrics=$(echo "$response" | jq --arg token "$token" -r '.data.metrics[] | select(.info.token.address == $token and .info.pool == null)')
+    tokenName=$(echo "$tokenMetrics" | jq -r '.info.token.name' | uniq)
+    usdAmount=$(echo "$response" | jq --arg token "$token" -r '.data.supportedAssets[] | select(.tokenAddress == $token) | .usdAmount' | jq -s 'add')
+    metricKeys=$(echo "$tokenMetrics" | jq -r '.name')
 
-# Process Other available tokens in pools
-echo "Other available tokens"
+    echo "$tokenName usdAmount: $usdAmount"
+    echo "$metricKeys"
+    echo "-"
+done
+echo "----------"
+
+echo "Other available tokens:"
+
+# Other available tokens in pools
 poolTokens=$(echo "$response" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.token.address' | uniq)
 for token in $poolTokens; do
-    if [[ ! " ${walletTokens[@]} " =~ " ${token} " ]]; then
-        tokenData=$(echo "$response" | jq -r --arg address "$token" '.data.metrics[] | select(.info.token.address==$address and .info.pool != null)')
-        tokenName=$(echo "$tokenData" | jq -r '.info.token.name' | uniq)
-        usdAmount=$(echo "$response" | jq -r --arg address "$token" '.data.supportedAssets[] | select(.tokenAddress==$address) | .usdAmount')
-        
-        if [[ ! -z "$usdAmount" && "$usdAmount" != "null" ]]; then
-            echo "$tokenName usdAmount: $usdAmount"
-        else
-            echo "$tokenName is unsupported"
-        fi
-        
-        echo "$tokenData" | jq -r '.name' | uniq
-        echo "---"
+    if ! [[ " ${walletTokens[@]} " =~ " ${token} " ]]; then
+        tokenMetrics=$(echo "$response" | jq --arg token "$token" -r '.data.metrics[] | select(.info.token.address == $token and .info.pool != null)')
+        tokenName=$(echo "$tokenMetrics" | jq -r '.info.token.name' | uniq)
+        usdAmount=$(echo "$response" | jq --arg token "$token" -r '.data.supportedAssets[] | select(.tokenAddress == $token) | .usdAmount' | jq -s 'add')
+        metricKeys=$(echo "$tokenMetrics" | jq -r '.name')
+
+        echo "$tokenName usdAmount: $usdAmount"
+        echo "$metricKeys"
+        echo "-"
     fi
+done
+
+echo "----------"
+echo "On positions:"
+# Pools and their metrics
+pools=$(echo "$response" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.pool.name' | uniq)
+for pool in $pools; do
+    echo "$pool:"
+    poolMetrics=$(echo "$response" | jq --arg pool "$pool" -r '.data.metrics[] | select(.info.pool.name == $pool)')
+    metricKeys=$(echo "$poolMetrics" | jq -r '.name')
+    echo "$metricKeys"
+    echo "-"
 done
