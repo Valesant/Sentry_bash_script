@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# Assuming apiKey, address, and threshold are passed as command line arguments
+apiKey=$1
+address=$2
+threshold=$3
+
+apiUrl="https://sentry.aleno.ai"
+response=$(curl -s -X GET "${apiUrl}/suggestions?addresses=${address}" -H "Authorization: ${apiKey}")
+
+# Extract and process tokens
+echo "Available metrics:"
+echo ""
+echo "Tokens in Wallet"
+tokens=$(echo "$response" | jq -r '.data.metrics[].info.token.address' | uniq)
+for token in $tokens; do
+    tokenName=$(echo "$response" | jq -r --arg address "$token" '.data.metrics[].info.token | select(.address==$address) | .name' | head -n 1)
+    usdAmount=$(echo "$response" | jq -r --arg address "$token" '.data.supportedAssets[] | select(.tokenAddress==$address) | .usdAmount')
+    if [[ ! -z "$usdAmount" ]]; then
+        echo "$tokenName usdAmount: $usdAmount"
+    else
+        echo "$tokenName is unsupported"
+    fi
+done
+
+# Metrics
+echo "token_total_tvl"
+echo "token_total_supply"
+echo "---"
+
+# Extract and process pools
+echo "Exposed Pools"
+pools=$(echo "$response" | jq -r '.data.metrics[].info.pool.address' | uniq)
+for pool in $pools; do
+    poolName=$(echo "$response" | jq -r --arg address "$pool" '.data.metrics[].info.pool | select(.address==$address) | .name' | head -n 1)
+    usdAmounts=$(echo "$response" | jq -r --arg address "$pool" '.data.supportedPositions[] | select(.contractAddress==$address) | .usdAmount')
+    totalUsdAmount=0
+    for amount in $usdAmounts; do
+        totalUsdAmount=$(echo $totalUsdAmount + $amount | bc)
+    done
+    echo "$poolName usdAmount: $totalUsdAmount"
+    echo "$pool"
+    
+    # Pool metrics
+    echo "$response" | jq -r --arg address "$pool" '.data.metrics[] | select(.info.pool.address==$address) | .name'
+    echo "-"
+done
