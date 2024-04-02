@@ -44,7 +44,7 @@ if [ ! -z "$uniqueTokenAddresses" ]; then
     tokenDetails=$(curl -s -X GET "$apiUrl/tokens?addresses=$uniqueTokenAddresses" -H "accept: application/json")
 
     # For each tracked token, display its details
-    echo "$tokenDetails" | jq -r '.data[] | select(.isTracked == true) | "🪙 \(.name)\n- \(.symbol) total supply\n- 📊 \(.symbol) total tvl\n-"'
+    echo "$tokenDetails" | jq -r '.data[] | select(.isTracked == true) | "🪙 \(.name)\n- \(.symbol) total supply\n- \(.symbol) total tvl\n"'
 else
     echo "No unique tokens to process."
 fi
