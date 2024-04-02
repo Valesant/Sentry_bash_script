@@ -23,10 +23,11 @@ echo "----------"
 echo "On tokens in Wallet:"
 walletTokens=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool == null) | .info.token.address' | uniq)
 for token in $walletTokens; do
-    tokenName=$(echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.metrics[] | select(.info.token.address == $token) | .info.token.name' | head -1)
+    tokenMetrics=$(echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.metrics[] | select(.info.token.address == $token and .info.pool == null)')
+    tokenName=$(echo "$tokenMetrics" | jq -r '.info.token.name' | head -1)
     usdAmount=$(echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.supportedAssets[] | select(.tokenAddress == $token) | .usdAmount' | head -1)
     echo "$tokenName usdAmount: $usdAmount"
-    echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.metrics[] | select(.info.token.address == $token) | .name'
+    echo "$tokenMetrics" | jq -r '"\(.name)\nKey: \(.key)"'
     echo "-"
 done
 
