@@ -32,19 +32,29 @@ done
 
 echo "----------"
 echo "Other available tokens:"
-# Extract all token addresses involved in pools and filter out the wallet tokens
+
+# Extract all token addresses involved in pools
 poolTokenAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.pool.tokenAddresses[]' | uniq)
+echo "All Pool Token Addresses: $poolTokenAddresses"
+
+# Filter out the wallet tokens from the pool token addresses
 uniqueTokenAddresses=$(echo "$poolTokenAddresses" | grep -v -f <(printf "%s\n" $walletTokens) | uniq)
+echo "Unique Token Addresses not in Wallet: $uniqueTokenAddresses"
 
-# Fetch details for unique tokens not in wallet
+# Fetch details for unique tokens not in wallet and ensure they are tracked
 for token in $uniqueTokenAddresses; do
+    echo "Processing token: $token"
     tokenDetails=$(curl -s -X GET "$apiUrl/tokens?addresses=$token" -H "accept: application/json")
-    trackedTokens=$(echo "$tokenDetails" | jq -r '.data[] | select(.isTracked == true)')
+    echo "Token Details for $token: $tokenDetails"
 
-    if [ ! -z "$trackedTokens" ]; then
-        echo "$trackedTokens" | jq -r '"\(.name) (\(.symbol))\n\(.symbol) total supply\n\(.symbol) total tvl\n-"'
+    isTracked=$(echo "$tokenDetails" | jq -r '.data[] | select(.isTracked == true)')
+    if [ ! -z "$isTracked" ]; then
+        echo "$isTracked" | jq -r '"\(.name) (\(.symbol))\n\(.symbol) total supply\n\(.symbol) total tvl\n-"'
+    else
+        echo "Token $token is not tracked or details are missing."
     fi
 done
+
 
 
 echo "----------"
