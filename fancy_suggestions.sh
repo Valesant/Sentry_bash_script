@@ -24,7 +24,7 @@ for token in $walletTokens; do
     tokenName=$(echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.metrics[] | select(.info.token.address == $token and .info.pool == null) | .info.token.name' | head -1)
     usdAmount=$(echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.supportedAssets[] | select(.tokenAddress == $token) | .usdAmount' | head -1)
     echo -e "\n🪙 $tokenName (USD Amount: $usdAmount)"
-    echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.metrics[] | select(.info.token.address == $token and .info.pool == null) | "- 📊 \(.name)"'
+    echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.metrics[] | select(.info.token.address == $token and .info.pool == null) | "- \(.name)"'
 done
 
 # Other Relevant Tokens
@@ -44,10 +44,11 @@ if [ ! -z "$uniqueTokenAddresses" ]; then
     tokenDetails=$(curl -s -X GET "$apiUrl/tokens?addresses=$uniqueTokenAddresses" -H "accept: application/json")
 
     # For each tracked token, display its details
-    echo "$tokenDetails" | jq -r '.data[] | select(.isTracked == true) | "🪙 \(.name)\n\- 📊 (.symbol) total supply\n- 📊 \(.symbol) total tvl\n-"'
+    echo "$tokenDetails" | jq -r '.data[] | select(.isTracked == true) | "🪙 \(.name)\n- \(.symbol) total supply\n- 📊 \(.symbol) total tvl\n-"'
 else
     echo "No unique tokens to process."
 fi
+
 
 
 # Pools and Associated Metrics
@@ -57,7 +58,7 @@ poolAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.i
 for poolAddress in $poolAddresses; do
     poolName=$(echo "$suggestionsResponse" | jq -r --arg poolAddress "$poolAddress" '.data.metrics[] | select(.info.pool.address == $poolAddress) | .info.pool.name' | head -1)
     echo -e "\n🔄 $poolName"
-    echo "$suggestionsResponse" | jq -r --arg poolAddress "$poolAddress" '.data.metrics[] | select(.info.pool.address == $poolAddress) | "- 📊 \(.name)"'
+    echo "$suggestionsResponse" | jq -r --arg poolAddress "$poolAddress" '.data.metrics[] | select(.info.pool.address == $poolAddress) | "- \(.name)"'
 done
 
 echo -e "\nPresentation data prepared. ✨"
