@@ -45,7 +45,6 @@ uniqueTokenAddresses=${uniqueTokenAddresses%,}
 # If there are any unique tokens not in wallet, make a single API call
 if [ ! -z "$uniqueTokenAddresses" ]; then
     tokenDetails=$(curl -s -X GET "$apiUrl/tokens?addresses=$uniqueTokenAddresses" -H "accept: application/json")
-    echo "Token Details: $tokenDetails"
 
     # For each tracked token, display its details
     echo "$tokenDetails" | jq -r '.data[] | select(.isTracked == true) | "\(.name)\n\(.symbol) total supply\n\(.symbol) total tvl\n-"'
