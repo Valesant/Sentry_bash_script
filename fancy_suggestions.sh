@@ -42,15 +42,13 @@ uniqueTokenAddresses=$(echo "$poolTokenAddresses" | sort | uniq | grep -v -f <(e
 # Trim the trailing comma
 uniqueTokenAddresses=${uniqueTokenAddresses%,}
 
-echo "Unique Token Addresses not in Wallet: $uniqueTokenAddresses"
-
 # If there are any unique tokens not in wallet, make a single API call
 if [ ! -z "$uniqueTokenAddresses" ]; then
     tokenDetails=$(curl -s -X GET "$apiUrl/tokens?addresses=$uniqueTokenAddresses" -H "accept: application/json")
     echo "Token Details: $tokenDetails"
 
     # For each tracked token, display its details
-    echo "$tokenDetails" | jq -r '.data[] | select(.isTracked == true) | "\(.name) (\(.symbol))\n\(.symbol) total supply\n\(.symbol) total tvl\n-"'
+    echo "$tokenDetails" | jq -r '.data[] | select(.isTracked == true) | "\(.name)\n\(.symbol) total supply\n\(.symbol) total tvl\n-"'
 else
     echo "No unique tokens to process."
 fi
