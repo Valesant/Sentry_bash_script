@@ -5,63 +5,61 @@ apiKey=$1
 address=$2
 apiUrl="https://sentry.aleno.ai"
 
+# Define colors
+GREEN="\033[0;32m"
+BLUE="\033[0;34m"
+CYAN="\033[0;36m"
+NC="\033[0m" # No Color
+
 # Ensure jq and bc are installed
 for tool in jq bc; do
     if ! command -v $tool &> /dev/null; then
-        echo "$tool could not be found. Attempting to install $tool..."
+        echo -e "${CYAN}$tool could not be found. Attempting to install $tool...${NC}"
         sudo apt-get update && sudo apt-get install -y $tool
     else
-        echo "$tool is already installed. Continuing..."
+        echo -e "${GREEN}$tool is already installed. Continuing...${NC}"
     fi
 done
 
 suggestionsResponse=$(curl -s -X GET "$apiUrl/suggestions?addresses=$address" -H "Authorization: $apiKey")
 
 # Tokens in Wallet
-echo "Available metrics:"
+echo -e "${BLUE}Available metrics:${NC}"
 echo "----------"
-echo "On tokens in Wallet:"
+echo -e "${GREEN}On tokens in Wallet:${NC}"
 walletTokens=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool == null) | .info.token.address' | uniq)
 for token in $walletTokens; do
-    tokenName=$(echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.metrics[] | select(.info.token.address == $token) | .info.token.name' | head -1)
+    tokenMetrics=$(echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.metrics[] | select(.info.token.address == $token and .info.pool == null)')
+    tokenName=$(echo "$tokenMetrics" | jq -r '.info.token.name' | head -1)
     usdAmount=$(echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.supportedAssets[] | select(.tokenAddress == $token) | .usdAmount' | head -1)
-    echo "$tokenName usdAmount: $usdAmount"
-    echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.metrics[] | select(.info.token.address == $token) | .name'
+    echo -e "${BLUE}$tokenName${NC} usdAmount: ${CYAN}$usdAmount${NC}"
+    echo "$tokenMetrics" | jq -r '"\(.name)"'
     echo "-"
 done
 
 echo "----------"
-echo "Other available tokens:"
+echo -e "${GREEN}Other available tokens:${NC}"
+# Other available tokens
+poolTokenAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.pool.tokenAddresses[]' | sort | uniq)
+poolTokenAddresses=$(echo "$poolTokenAddresses" | grep -v -f <(echo "$walletTokens" | sort | uniq))
 
-# Extract all token addresses involved in pools
-poolTokenAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.pool.tokenAddresses[]' | uniq)
-
-# Filter out the wallet tokens from the pool token addresses and ensure unique addresses
-uniqueTokenAddresses=$(echo "$poolTokenAddresses" | sort | uniq | grep -v -f <(echo "$walletTokens" | sort | uniq) | tr '\n' ',')
-
-# Trim the trailing comma
-uniqueTokenAddresses=${uniqueTokenAddresses%,}
-
-# If there are any unique tokens not in wallet, make a single API call
-if [ ! -z "$uniqueTokenAddresses" ]; then
-    tokenDetails=$(curl -s -X GET "$apiUrl/tokens?addresses=$uniqueTokenAddresses" -H "accept: application/json")
-
-    # For each tracked token, display its details
-    echo "$tokenDetails" | jq -r '.data[] | select(.isTracked == true) | "\(.name)\n\(.symbol) total supply\n\(.symbol) total tvl\n-"'
+# Fetch details for unique tokens not in wallet in a single request
+if [ ! -z "$poolTokenAddresses" ]; then
+    tokenAddressesString=$(echo $poolTokenAddresses | tr '\n' ',' | sed 's/,$//')
+    tokenDetails=$(curl -s -X GET "$apiUrl/tokens?addresses=$tokenAddressesString" -H "accept: application/json")
+    echo "$tokenDetails" | jq -r '.data[] | select(.isTracked == true) | "- \(.name) (\(.symbol))"'
 else
     echo "No unique tokens to process."
 fi
 
-
-
-
 echo "----------"
-echo "On positions:"
+echo -e "${GREEN}On positions:${NC}"
 # Group metrics by pool
 poolAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.pool.address' | uniq)
 for poolAddress in $poolAddresses; do
-    poolName=$(echo "$suggestionsResponse" | jq -r --arg poolAddress "$poolAddress" '.data.metrics[] | select(.info.pool.address == $poolAddress) | .info.pool.name' | head -1)
-    echo "$poolName:"
-    echo "$suggestionsResponse" | jq -r --arg poolAddress "$poolAddress" '.data.metrics[] | select(.info.pool.address == $poolAddress) | .name'
+    poolMetrics=$(echo "$suggestionsResponse" | jq -r --arg poolAddress "$poolAddress" '.data.metrics[] | select(.info.pool.address == $poolAddress)')
+    poolName=$(echo "$poolMetrics" | jq -r '.info.pool.name' | head -1)
+    echo -e "${CYAN}$poolName:${NC}"
+    echo "$poolMetrics" | jq -r '"\(.name)"'
     echo "-"
 done
