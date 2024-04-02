@@ -32,12 +32,20 @@ done
 
 echo "----------"
 echo "Other available tokens:"
-# Other available tokens in pools (Unique tokens not in wallet)
-poolTokenAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.pool.tokenAddresses[]' | uniq | grep -v -f <(echo "$walletTokens"))
-for token in $poolTokenAddresses; do
+# Extract all token addresses involved in pools and filter out the wallet tokens
+poolTokenAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.pool.tokenAddresses[]' | uniq)
+uniqueTokenAddresses=$(echo "$poolTokenAddresses" | grep -v -f <(printf "%s\n" $walletTokens) | uniq)
+
+# Fetch details for unique tokens not in wallet
+for token in $uniqueTokenAddresses; do
     tokenDetails=$(curl -s -X GET "$apiUrl/tokens?addresses=$token" -H "accept: application/json")
-    echo "$tokenDetails" | jq -r '.data[] | select(.isTracked == true) | "\(.name) (\(.symbol))\n\(.symbol) total supply\n\(.symbol) total tvl\n-"'
+    trackedTokens=$(echo "$tokenDetails" | jq -r '.data[] | select(.isTracked == true)')
+
+    if [ ! -z "$trackedTokens" ]; then
+        echo "$trackedTokens" | jq -r '"\(.name) (\(.symbol))\n\(.symbol) total supply\n\(.symbol) total tvl\n-"'
+    fi
 done
+
 
 echo "----------"
 echo "On positions:"
