@@ -27,7 +27,7 @@ for token in $walletTokens; do
     tokenName=$(echo "$tokenMetrics" | jq -r '.info.token.name' | head -1)
     usdAmount=$(echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.supportedAssets[] | select(.tokenAddress == $token) | .usdAmount' | head -1)
     echo "$tokenName usdAmount: $usdAmount"
-    echo "$tokenMetrics" | jq -r '"\(.name)\nKey: \(.key)"'
+    echo "$tokenMetrics" | jq -r '"\(.name)"'
     echo "-"
 done
 
