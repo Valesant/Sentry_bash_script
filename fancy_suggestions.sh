@@ -31,7 +31,7 @@ for token in $walletTokens; do
 done
 
 echo "----------"
-echo "Other available tokens:"
+echo "Other available tokens AAAAA:"
 
 # Extract all token addresses involved in pools
 poolTokenAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.pool.tokenAddresses[]' | uniq)
