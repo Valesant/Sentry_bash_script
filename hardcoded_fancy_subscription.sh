@@ -644,23 +644,38 @@ userNameResponse=$(echo "$userResponse" | jq -r '.data[0].userName')
 echo "Fetching data..."
 echo -e "\n🌟 \e[1mHello, $userNameResponse!\e[0m"
 echo -e "🔑 Your account ID is: \e[1m$accountId\e[0m"
-echo "---------------------------------"
+echo "---------------------------------\n"
 
 # Tokens in Wallet
 echo -e "💼 \e[1mYour Wallet Overview:\e[0m"
 echo "---------------------------------"
 walletTokens=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool == null) | .info.token.address' | uniq)
 for token in $walletTokens; do
-    tokenName=$(echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.metrics[] | select(.info.token.address == $token and .info.pool == null) | .info.token.name' | head -1)
+    tokenName=$(echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.metrics[] | select(.info.token.address == $token) | .info.token.name' | head -1)
     usdAmount=$(echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.supportedAssets[] | select(.tokenAddress == $token) | .usdAmount' | head -1)
+    tokenMetrics=$(echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.metrics[] | select(.info.token.address == $token) | "\(.name)\n  Key: \(.key)"')
     echo -e "\n🪙 $tokenName (USD Amount: $usdAmount)"
-    echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.metrics[] | select(.info.token.address == $token and .info.pool == null) | "- \(.name)"'
+    echo "$tokenMetrics"
 done
 
 # Other Relevant Tokens
-echo -e "\n🌐 \e[1mOther Relevant Tokens:\e[0m"
-echo "---------------------------------"
-# This part remains unchanged - it's already set up to output in a fancy, readable manner
+echo -e "\n🌐 \e[1mOther Relevant Tokens to track:\e[0m"
+echo "-------------------------------"
+poolTokenAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.pool.tokenAddresses[]' | uniq)
+uniqueTokenAddresses=$(echo "$poolTokenAddresses" | sort | uniq | grep -v -f <(echo "$walletTokens" | sort | uniq) | tr '\n' ',')
+
+if [ ! -z "$uniqueTokenAddresses" ]; then
+    # For each unique token, find and display its total supply and total tvl
+    IFS=',' read -ra ADDR <<< "$uniqueTokenAddresses"
+    for i in "${ADDR[@]}"; do
+        tokenName=$(echo "$suggestionsResponse" | jq -r --arg token "$i" '.data.metrics[] | select(.info.token.address == $token) | .info.token.name' | head -1)
+        echo "🪙 $tokenName"
+        echo "- $(echo "$suggestionsResponse" | jq -r --arg token "$i" '.data.metrics[] | select(.info.token.address == $token) | select(.name | contains("total supply")) | "\(.name)\n  Key: \(.key)"')"
+        echo "- $(echo "$suggestionsResponse" | jq -r --arg token "$i" '.data.metrics[] | select(.info.token.address == $token) | select(.name | contains("total tvl")) | "\(.name)\n  Key: \(.key)"')"
+    done
+else
+    echo "No unique tokens to process."
+fi
 
 # Pools and Associated Metrics
 echo -e "\n🏊 \e[1mLiquidity Pools Overview:\e[0m"
@@ -668,8 +683,9 @@ echo "---------------------------------"
 poolAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.pool.address' | uniq)
 for poolAddress in $poolAddresses; do
     poolName=$(echo "$suggestionsResponse" | jq -r --arg poolAddress "$poolAddress" '.data.metrics[] | select(.info.pool.address == $poolAddress) | .info.pool.name' | head -1)
+    poolMetrics=$(echo "$suggestionsResponse" | jq -r --arg poolAddress "$poolAddress" '.data.metrics[] | select(.info.pool.address == $poolAddress) | "\(.name)\n  Key: \(.key)"')
     echo -e "\n🔄 $poolName"
-    echo "$suggestionsResponse" | jq -r --arg poolAddress "$poolAddress" '.data.metrics[] | select(.info.pool.address == $poolAddress) | "- \(.name)"'
+    echo "$poolMetrics"
 done
 
 echo -e "\nPresentation data prepared. ✨"
