@@ -619,8 +619,32 @@ suggestionsResponse='{
    }
 }'
 
+# Assigning input arguments to variables
+#address="$1"
+userName="$1"
+apiKey="$2"
+apiUrl="https://sentry.aleno.ai"
+
+# Step 0: Create a user and get userId
+userResponse=$(curl -s -X POST "${apiUrl}/users" \
+    -H 'accept: application/json' \
+    -H "Authorization: ${apiKey}" \
+    -H 'Content-Type: application/json' \
+    -d "{\"users\": [{ \"userName\": \"$userName\" }]}")
+
+
 # Begin script
 echo -e "Fetching data...\n"
+
+# Extract accountId from createUserResponse
+accountId=$(echo "$userResponse" | jq -r '.data[0].accountId')
+userNameResponse=$(echo "$userResponse" | jq -r '.data[0].userName')
+
+# Begin script with a friendly message
+echo "Fetching data..."
+echo -e "\n🌟 \e[1mHello, $userNameResponse!\e[0m"
+echo -e "🔑 Your account ID is: \e[1m$accountId\e[0m"
+echo "---------------------------------"
 
 # Tokens in Wallet
 echo -e "💼 \e[1mYour Wallet Overview:\e[0m"
