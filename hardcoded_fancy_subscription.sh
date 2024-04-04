@@ -653,7 +653,7 @@ walletTokens=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.in
 for token in $walletTokens; do
     tokenName=$(echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.metrics[] | select(.info.token.address == $token) | .info.token.name' | head -1)
     usdAmount=$(echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.supportedAssets[] | select(.tokenAddress == $token) | .usdAmount' | head -1)
-    tokenMetrics=$(echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.metrics[] | select(.info.token.address == $token) | "\(.name)\n  Key: \(.key)"')
+    tokenMetrics=$(echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.metrics[] | select(.info.token.address == $token) | "\(.name)\n"')
     echo -e "\n🪙 $tokenName (USD Amount: $usdAmount)"
     echo "$tokenMetrics"
 done
@@ -670,8 +670,8 @@ if [ ! -z "$uniqueTokenAddresses" ]; then
     for i in "${ADDR[@]}"; do
         tokenName=$(echo "$suggestionsResponse" | jq -r --arg token "$i" '.data.metrics[] | select(.info.token.address == $token) | .info.token.name' | head -1)
         echo "🪙 $tokenName"
-        echo "- $(echo "$suggestionsResponse" | jq -r --arg token "$i" '.data.metrics[] | select(.info.token.address == $token) | select(.name | contains("total supply")) | "\(.name)\n  Key: \(.key)"')"
-        echo "- $(echo "$suggestionsResponse" | jq -r --arg token "$i" '.data.metrics[] | select(.info.token.address == $token) | select(.name | contains("total tvl")) | "\(.name)\n  Key: \(.key)"')"
+        echo "- $(echo "$suggestionsResponse" | jq -r --arg token "$i" '.data.metrics[] | select(.info.token.address == $token) | select(.name | contains("total supply")) | "\(.name)\n"')"
+        echo "- $(echo "$suggestionsResponse" | jq -r --arg token "$i" '.data.metrics[] | select(.info.token.address == $token) | select(.name | contains("total tvl")) | "\(.name)\n"')"
     done
 else
     echo "No unique tokens to process."
@@ -683,7 +683,7 @@ echo "---------------------------------"
 poolAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.pool.address' | uniq)
 for poolAddress in $poolAddresses; do
     poolName=$(echo "$suggestionsResponse" | jq -r --arg poolAddress "$poolAddress" '.data.metrics[] | select(.info.pool.address == $poolAddress) | .info.pool.name' | head -1)
-    poolMetrics=$(echo "$suggestionsResponse" | jq -r --arg poolAddress "$poolAddress" '.data.metrics[] | select(.info.pool.address == $poolAddress) | "\(.name)\n  Key: \(.key)"')
+    poolMetrics=$(echo "$suggestionsResponse" | jq -r --arg poolAddress "$poolAddress" '.data.metrics[] | select(.info.pool.address == $poolAddress) | "\(.name)\n"')
     echo -e "\n🔄 $poolName"
     echo "$poolMetrics"
 done
@@ -705,6 +705,9 @@ getKeysByMetricType() {
 # Get unique metric types
 uniqueMetricTypes=$(getUniqueMetricTypes)
 
+# Extract all token addresses involved in pools for the "Other Relevant Tokens to track" section
+otherRelevantTokenAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.pool.tokenAddresses[]' | sort | uniq | grep -v -f <(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool == null) | .info.token.address'))
+
 # Display keys grouped by metric type
 for type in $uniqueMetricTypes; do
     echo "$type"
@@ -712,6 +715,13 @@ for type in $uniqueMetricTypes; do
     for key in $keys; do
         echo "$key"
     done
+
+    # Additional keys for token_total_tvl and token_total_supply based on the "Other Relevant Tokens to track"
+    if [[ "$type" == "token_total_tvl" || "$type" == "token_total_supply" ]]; then
+        for address in $otherRelevantTokenAddresses; do
+            echo "${type}_${address}"
+        done
+    fi
+
     echo "" # Newline for separation
 done
-
