@@ -689,3 +689,29 @@ for poolAddress in $poolAddresses; do
 done
 
 echo -e "\nPresentation data prepared. ✨"
+
+
+# Function to get unique metric types
+getUniqueMetricTypes() {
+  echo "$suggestionsResponse" | jq -r '.data.metrics[].type' | sort | uniq
+}
+
+# Function to get keys by metric type
+getKeysByMetricType() {
+  local metricType="$1"
+  echo "$suggestionsResponse" | jq -r --arg metricType "$metricType" '.data.metrics[] | select(.type == $metricType) | .key'
+}
+
+# Get unique metric types
+uniqueMetricTypes=$(getUniqueMetricTypes)
+
+# Display keys grouped by metric type
+for type in $uniqueMetricTypes; do
+    echo "$type"
+    keys=$(getKeysByMetricType "$type")
+    for key in $keys; do
+        echo "$key"
+    done
+    echo "" # Newline for separation
+done
+
