@@ -662,20 +662,19 @@ done
 echo -e "\n🌐 \e[1mOther Relevant Tokens to track:\e[0m"
 echo "-------------------------------"
 poolTokenAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.pool.tokenAddresses[]' | uniq)
-uniqueTokenAddresses=$(echo "$poolTokenAddresses" | sort | uniq | grep -v -f <(echo "$walletTokens" | sort | uniq) | tr '\n' ',')
+uniqueTokenAddresses=$(echo "$poolTokenAddresses" | sort | uniq | grep -v -f <(echo "$walletTokens" | sort | uniq))
 
-if [ ! -z "$uniqueTokenAddresses" ]; then
-    # For each unique token, find and display its total supply and total tvl
-    IFS=',' read -ra ADDR <<< "$uniqueTokenAddresses"
-    for i in "${ADDR[@]}"; do
-        tokenName=$(echo "$suggestionsResponse" | jq -r --arg token "$i" '.data.metrics[] | select(.info.token.address == $token) | .info.token.name' | head -1)
-        echo "🪙 $tokenName"
-        echo "- $(echo "$suggestionsResponse" | jq -r --arg token "$i" '.data.metrics[] | select(.info.token.address == $token) | select(.name | contains("total supply")) | "\(.name)\n"')"
-        echo "- $(echo "$suggestionsResponse" | jq -r --arg token "$i" '.data.metrics[] | select(.info.token.address == $token) | select(.name | contains("total tvl")) | "\(.name)\n"')"
-    done
-else
-    echo "No unique tokens to process."
-fi
+# Display each token's total supply and total tvl
+for tokenAddress in $uniqueTokenAddresses; do
+    tokenName=$(echo "$suggestionsResponse" | jq -r --arg token "$tokenAddress" '.data.metrics[] | select(.info.token.address == $token) | .info.token.name' | head -1)
+    tokenSupplyKey="token_total_supply_${tokenAddress}"
+    tokenTvlKey="token_total_tvl_${tokenAddress}"
+
+    echo "🪙 $tokenName"
+    echo "- ${tokenSupplyKey}"
+    echo "- ${tokenTvlKey}"
+done
+
 
 # Pools and Associated Metrics
 echo -e "\n🏊 \e[1mLiquidity Pools Overview:\e[0m"
