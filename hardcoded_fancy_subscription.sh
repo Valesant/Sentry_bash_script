@@ -732,38 +732,76 @@ done
 echo -e "\nPresentation data prepared. ✨"
 
 
-# Initialize an empty array for subscriptions
-subscriptions=()
+#!/bin/bash
 
-# Extract unique metric types
+# The API endpoint and user ID (replace with actual values)
+apiUrl="https://sentry.aleno.ai/subscriptions"
+userId="USER_ID"  # Replace with the actual user ID
+apiKey="YOUR_API_KEY"  # Replace with the actual API key
+
+# Add a debug message to indicate the script has started
+echo "Script started. Setting up variables and functions."
+
+# Function to get unique metric types (stubbed for now)
+getUniqueMetricTypes() {
+  echo "metric_type1 metric_type2 metric_type3"  # Replace with actual function code
+  echo "Debug: Retrieved metric types."  # Debug message
+}
+
+# Function to get keys by metric type (stubbed for now)
+getKeysByMetricType() {
+  local metricType="$1"
+  echo "key_for_${metricType}_1 key_for_${metricType}_2"  # Replace with actual function code
+  echo "Debug: Retrieved keys for metric type $metricType."  # Debug message
+}
+
+# Debug message before starting to create the payload
+echo "Starting to create the payload for API request."
+
+# Start creating the payload for the API request
+subscriptions_payload="{\"subscriptions\":["
+
+# Retrieve all unique metric types
 uniqueMetricTypes=$(getUniqueMetricTypes)
 
-# Prompt user for thresholds and create subscription entries
+# For each metric type, ask the user for the threshold and construct the payload
+first=true
 for type in $uniqueMetricTypes; do
-    echo -n "Enter threshold for $type: "
-    read threshold
+    echo "Please enter the threshold for metric type '$type':"
+    read threshold  # Read user input for the threshold
+    echo "Debug: User entered threshold $threshold for metric type $type."  # Debug message
 
+    # Retrieve all keys for this metric type
     keys=$(getKeysByMetricType "$type")
-
-    # Iterate over each key and create subscription entry
+    
+    # For each key, add it to the payload
     for key in $keys; do
-        subscription=$(jq -n \
-                        --arg userId "$userId" \
-                        --arg metricKey "$key" \
-                        --argjson threshold "$threshold" \
-                        '{userId: $userId, metricKey: $metricKey, threshold: $threshold}')
-        subscriptions+=("$subscription")
+        if [ "$first" = true ]; then
+            first=false
+            echo "Debug: Adding first subscription to the payload."  # Debug message
+        else
+            subscriptions_payload+=","
+            echo "Debug: Adding subsequent subscription to the payload."  # Debug message
+        fi
+
+        # Append the subscription JSON object to the payload
+        subscriptions_payload+="{\"userId\":\"$userId\",\"metricKey\":\"$key\",\"threshold\":$threshold}"
     done
 done
 
-# Combine all subscription entries into a JSON array
-subscriptions_json=$(jq -n --argjson subscriptions "$(jq -s '.' <<<"${subscriptions[*]}")" '{"subscriptions": $subscriptions}')
+# Finalize the payload by closing the JSON array
+subscriptions_payload+="]}"
+echo "Debug: Finished creating the payload."  # Debug message
 
-# Make the API call
+# Use curl to send the API request
+echo "Sending the API request to create subscriptions."
 response=$(curl -s -X POST "$apiUrl" \
-                -H "accept: application/json" \
-                -H "Authorization: Bearer $apiKey" \
-                -H "Content-Type: application/json" \
-                -d "$subscriptions_json")
+  -H "accept: application/json" \
+  -H "Authorization: Bearer $apiKey" \
+  -H "Content-Type: application/json" \
+  -d "$subscriptions_payload")
 
+# Display the API response
 echo "Subscription response: $response"
+echo "Script finished."  # Debug message to indicate the script has finished
+
