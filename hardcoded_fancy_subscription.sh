@@ -729,3 +729,61 @@ for type in $uniqueMetricTypes; do
 
     echo "" # Newline for separation
 done
+
+
+# Prompt for threshold for each metric type and store the responses
+declare -A metricTypeThresholds
+
+for type in $uniqueMetricTypes; do
+    read -p "Enter threshold for $type: " threshold
+    metricTypeThresholds[$type]=$threshold
+done
+
+# Prepare the subscriptions data
+subscriptions=()
+
+for type in $uniqueMetricTypes; do
+    keys=$(getKeysByMetricType "$type")
+
+    for key in $keys; do
+        # Prepare the JSON object for this subscription
+        subscription=$(jq -n \
+                        --arg userId "$userId" \
+                        --arg metricKey "$key" \
+                        --arg threshold "${metricTypeThresholds[$type]}" \
+                        '{userId: $userId, metricKey: $metricKey, threshold: ($threshold | tonumber)}')
+
+        # Append to the subscriptions array
+        subscriptions+=("$subscription")
+    done
+
+    # Additional subscriptions for token_total_tvl and token_total_supply
+    if [[ "$type" == "token_total_tvl" || "$type" == "token_total_supply" ]]; then
+        for address in $otherRelevantTokenAddresses; do
+            # Prepare the JSON object for this subscription
+            subscription=$(jq -n \
+                            --arg userId "$userId" \
+                            --arg metricKey "${type}_${address}" \
+                            --arg threshold "${metricTypeThresholds[$type]}" \
+                            '{userId: $userId, metricKey: $metricKey, threshold: ($threshold | tonumber)}')
+
+            # Append to the subscriptions array
+            subscriptions+=("$subscription")
+        done
+    fi
+done
+
+# Convert subscriptions array to a JSON array string
+subscriptionsJson=$(jq -n --argjson subs "${subscriptions[@]}" '$subs')
+
+# Call the API to create subscriptions
+response=$(curl -s -X POST \
+  "https://sentry.aleno.ai/subscriptions" \
+  -H 'accept: application/json' \
+  -H "Authorization: $apiKey" \
+  -d "$subscriptionsJson")
+
+# Output the response
+echo "Subscription response: $response"
+
+
