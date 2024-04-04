@@ -729,7 +729,7 @@ for type in $uniqueMetricTypes; do
 done
 
 
-echo -e "\nPresentation data prepared. ✨"
+echo -e "\nPresentation data prepared. ✨ AAAAAAAAAAAAAAAAAAAAAAAAA"
 
 
 # ... [The rest of your script up to defining getKeysByMetricType]
