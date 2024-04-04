@@ -729,7 +729,7 @@ for type in $uniqueMetricTypes; do
 done
 
 
-echo -e "\nPresentation data prepared. ✨ AAAAAAAAAAAAAAAAAAAAAAAAA"
+echo -e "\nPresentation data prepared. ✨"
 
 
 # Initialize an empty array for subscriptions
