@@ -732,33 +732,10 @@ done
 echo -e "\nPresentation data prepared. ✨"
 
 
-#!/bin/bash
-
-# The API endpoint and user ID (replace with actual values)
-apiUrl="https://sentry.aleno.ai/subscriptions"
-userId="USER_ID"  # Replace with the actual user ID
-apiKey="YOUR_API_KEY"  # Replace with the actual API key
-
-# Add a debug message to indicate the script has started
-echo "Script started. Setting up variables and functions."
-
-# Function to get unique metric types (stubbed for now)
-getUniqueMetricTypes() {
-  echo "metric_type1 metric_type2 metric_type3"  # Replace with actual function code
-  echo "Debug: Retrieved metric types."  # Debug message
-}
-
-# Function to get keys by metric type (stubbed for now)
-getKeysByMetricType() {
-  local metricType="$1"
-  echo "key_for_${metricType}_1 key_for_${metricType}_2"  # Replace with actual function code
-  echo "Debug: Retrieved keys for metric type $metricType."  # Debug message
-}
-
-# Debug message before starting to create the payload
+# Debug message before creating the payload
 echo "Starting to create the payload for API request."
 
-# Start creating the payload for the API request
+# Initialize the payload for the API request
 subscriptions_payload="{\"subscriptions\":["
 
 # Retrieve all unique metric types
@@ -767,9 +744,9 @@ uniqueMetricTypes=$(getUniqueMetricTypes)
 # For each metric type, ask the user for the threshold and construct the payload
 first=true
 for type in $uniqueMetricTypes; do
-    echo "Please enter the threshold for metric type '$type':"
-    read threshold  # Read user input for the threshold
-    echo "Debug: User entered threshold $threshold for metric type $type."  # Debug message
+    echo "Please enter the threshold for metric type '$type': "
+    read -r threshold  # Read user input for the threshold
+    echo "Debug: User entered threshold $threshold for metric type $type."
 
     # Retrieve all keys for this metric type
     keys=$(getKeysByMetricType "$type")
@@ -778,10 +755,8 @@ for type in $uniqueMetricTypes; do
     for key in $keys; do
         if [ "$first" = true ]; then
             first=false
-            echo "Debug: Adding first subscription to the payload."  # Debug message
         else
             subscriptions_payload+=","
-            echo "Debug: Adding subsequent subscription to the payload."  # Debug message
         fi
 
         # Append the subscription JSON object to the payload
@@ -791,9 +766,11 @@ done
 
 # Finalize the payload by closing the JSON array
 subscriptions_payload+="]}"
-echo "Debug: Finished creating the payload."  # Debug message
 
-# Use curl to send the API request
+# Debug message to show the payload
+echo "Debug: Payload ready to send: $subscriptions_payload"
+
+# Send the API request using curl
 echo "Sending the API request to create subscriptions."
 response=$(curl -s -X POST "$apiUrl" \
   -H "accept: application/json" \
@@ -803,5 +780,4 @@ response=$(curl -s -X POST "$apiUrl" \
 
 # Display the API response
 echo "Subscription response: $response"
-echo "Script finished."  # Debug message to indicate the script has finished
-
+echo "Script finished."
