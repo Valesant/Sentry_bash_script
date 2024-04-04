@@ -732,57 +732,38 @@ done
 echo -e "\nPresentation data prepared. ✨ AAAAAAAAAAAAAAAAAAAAAAAAA"
 
 
-# ... [The rest of your script up to defining getKeysByMetricType]
+# Initialize an empty array for subscriptions
+subscriptions=()
 
-# Ask for a threshold for each metric type and create subscriptions
-subscriptions_payload="{\"subscriptions\":["
+# Extract unique metric types
+uniqueMetricTypes=$(getUniqueMetricTypes)
 
-first=true
+# Prompt user for thresholds and create subscription entries
 for type in $uniqueMetricTypes; do
-    read -p "Enter threshold for $type: " threshold
+    echo -n "Enter threshold for $type: "
+    read threshold
 
-    # Get the keys for the current metric type
     keys=$(getKeysByMetricType "$type")
 
+    # Iterate over each key and create subscription entry
     for key in $keys; do
-        # Comma handling for JSON array elements
-        if [ "$first" = true ]; then
-            first=false
-        else
-            subscriptions_payload+=","
-        fi
-
-        # Append the subscription object to the payload
-        subscriptions_payload+="{\"userId\":\"$userId\",\"metricKey\":\"$key\",\"threshold\":$threshold}"
+        subscription=$(jq -n \
+                        --arg userId "$userId" \
+                        --arg metricKey "$key" \
+                        --argjson threshold "$threshold" \
+                        '{userId: $userId, metricKey: $metricKey, threshold: $threshold}')
+        subscriptions+=("$subscription")
     done
-
-    # Additional subscriptions for token_total_tvl and token_total_supply
-    if [[ "$type" == "token_total_tvl" || "$type" == "token_total_supply" ]]; then
-        for address in $otherRelevantTokenAddresses; do
-            # Comma handling for JSON array elements
-            if [ "$first" = true ]; then
-                first=false
-            else
-                subscriptions_payload+=","
-            fi
-
-            # Append the subscription object to the payload
-            subscriptions_payload+="{\"userId\":\"$userId\",\"metricKey\":\"${type}_${address}\",\"threshold\":$threshold}"
-        done
-    fi
 done
 
-# Close the JSON array
-subscriptions_payload+="]}"
+# Combine all subscription entries into a JSON array
+subscriptions_json=$(jq -n --argjson subscriptions "$(jq -s '.' <<<"${subscriptions[*]}")" '{"subscriptions": $subscriptions}')
 
-# Now $subscriptions_payload contains the full JSON payload for the API call
-# Call the API to create subscriptions
-response=$(curl -s -X POST \
-  "https://sentry.aleno.ai/subscriptions" \
-  -H 'accept: application/json' \
-  -H "Authorization: $apiKey" \
-  -d "$subscriptions_payload")
+# Make the API call
+response=$(curl -s -X POST "$apiUrl" \
+                -H "accept: application/json" \
+                -H "Authorization: Bearer $apiKey" \
+                -H "Content-Type: application/json" \
+                -d "$subscriptions_json")
 
-# Output the response
 echo "Subscription response: $response"
-
