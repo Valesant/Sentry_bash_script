@@ -66,4 +66,4 @@ for poolAddress in $poolAddresses; do
     echo "$suggestionsResponse" | jq -r --arg poolAddress "$poolAddress" '.data.metrics[] | select(.info.pool.address == $poolAddress) | "- \(.name)"'
 done
 
-echo -e "\nPresentation data prepared. ✨"
+echo -e "\nPresentation data prepared. ✨ AA"
