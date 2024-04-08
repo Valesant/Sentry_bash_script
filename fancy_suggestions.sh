@@ -13,7 +13,7 @@ for tool in jq bc; do
     fi
 done
 
-echo "Fetching data..."
+echo "Fetching data..."  
 suggestionsResponse=$(curl -s -X GET "$apiUrl/suggestions?addresses=$address" -H "Authorization: $apiKey")
 
 # Tokens in Wallet
