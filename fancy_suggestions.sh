@@ -15,6 +15,7 @@ done
 
 echo "Fetching data..."
 suggestionsResponse=$(curl -s -X GET "$apiUrl/suggestions?addresses=$address" -H "Authorization: $apiKey")
+echo "$suggestionsResponse" | jq .
 
 # Tokens in Wallet
 echo -e "\n💼 \e[1mTokens in Your Wallet and Associated Metrics:\e[0m"
