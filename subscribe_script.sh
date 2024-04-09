@@ -125,10 +125,11 @@ subscriptions_payload="[${subscriptions_payload:1}]"
 
 echo "Final Payload: $subscriptions_payload"
 
+subscriptions_json=$(jq -n --argjson subs "$(printf "%s\n" "${subscriptions[@]}" | jq -s)" '$subs')
 
 # Creating subscriptions
 echo "📝 Creating subscriptions for user $userName..."
-createSubscriptionsResponse=$(curl -s -X POST "${apiUrl}/subscriptions" -H "accept: application/json" -H "Authorization: ${apiKey}" -d "{\"subscriptions\": $subscriptions_payload}")
+createSubscriptionsResponse=$(curl -s -X POST "${apiUrl}/subscriptions" -H "accept: application/json" -H "Authorization: ${apiKey}" -d "{\"subscriptions\": $subscriptions_json}")
 
 subscriptionSuccess=$(echo "$createSubscriptionsResponse" | jq -r '.data | length')
 if [ "$subscriptionSuccess" -gt 0 ]; then
