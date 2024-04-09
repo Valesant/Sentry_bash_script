@@ -59,42 +59,41 @@ response=$(curl -s -X GET "${apiUrl}/suggestions?addresses=${address}" -H "Autho
 # Debug print the fetched metrics response
 echo "Fetched metrics response: $response"
 
-# Initialize subscriptions payload
-subscriptionsPayload="{\"subscriptions\":["
-
-# Process each metric, determine the correct threshold, and add to the payload
-echo "$response" | jq -c '.data.metrics[]' | while read metric; do
-    key=$(echo "$metric" | jq -r '.key')
-    type=$(echo "$metric" | jq -r '.type')
-    threshold=0
-
-    # Select threshold based on metric type
+#AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+#AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+# Parse the response and build the subscriptions payload
+subscriptions=()
+while read -r key type; do
+    threshold=0 # default
     case "$type" in
-        "token_total_tvl") threshold=$token_total_tvl_threshold ;;
-        "token_total_supply") threshold=$token_total_supply_threshold ;;
-        "pool_rate") threshold=$pool_rate_threshold ;;
-        "pool_tvl") threshold=$pool_tvl_threshold ;;
+        "token_total_tvl")
+            threshold=$token_total_tvl_threshold
+            ;;
+        "token_total_supply")
+            threshold=$token_total_supply_threshold
+            ;;
+        "pool_tvl")
+            threshold=$pool_tvl_threshold
+            ;;
+        "pool_rate")
+            threshold=$pool_rate_threshold
+            ;;
     esac
 
-    # Add subscription to payload
-    subscriptionsPayload+="{\"userId\":\"$userId\",\"metricKey\":\"$key\",\"threshold\":$threshold},"
+    # Append to subscriptions array
+    subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"$key\", \"threshold\": $threshold}")
+done < <(echo $response | jq -r '.data.metrics[] | "\(.key) \(.type)"')
 
-    # Debug print for each subscription added
-    echo "Added subscription for $key with threshold $threshold"
-done
+# Join array elements
+subscriptions_payload=$(printf ",%s" "${subscriptions[@]}")
+subscriptions_payload="[${subscriptions_payload:1}]"
 
-# Close the JSON array for subscriptions payload
-subscriptionsPayload="${subscriptionsPayload%,}]}"
+# Final payload
+final_payload="{\"subscriptions\": $subscriptions_payload}"
 
-# Debug print the final subscriptions payload
-echo "Final subscriptions payload: $subscriptionsPayload"
+echo "Final Payload: $final_payload"
 
-# Step 3: Create subscriptions
-echo "Creating subscriptions..."
-subscriptionResponse=$(curl -s -X POST "$apiUrl/subscriptions" \
-    -H 'Content-Type: application/json' \
-    -H "Authorization: $apiKey" \
-    -d "$subscriptionsPayload")
-
-# Print subscription creation response
-echo "Subscription creation response: $subscriptionResponse"
+# Use the final payload in the curl command to create subscriptions
+curl -X POST "${apiUrl}/subscriptions" -H "accept: application/json" -H "Authorization: ${apiKey}" -d "$final_payload"
+#AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+#AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
