@@ -42,11 +42,7 @@ poolTokenAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | sele
 uniqueTokenAddresses=$(echo "$poolTokenAddresses" | grep -vxF -f <(echo "$walletTokens") | tr '\n' ',' | sed 's/,$//')
 
 if [ ! -z "$uniqueTokenAddresses" ]; then
-    echo "Querying additional token details for: $uniqueTokenAddresses"
     tokenDetails=$(curl -s -X GET "$apiUrl/tokens?chainId=eth&addresses=$uniqueTokenAddresses" -H "accept: application/json")
-
-    # Debug: Print raw API response
-    echo "Raw Token Details: $tokenDetails"
 
     # Display token information
     echo "$tokenDetails" | jq -r '.data[] | select(.isTracked == true) | "\n🪙 \(.name)\n- \(.symbol) total tvl\n- \(.symbol) total supply"'
