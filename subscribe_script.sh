@@ -30,13 +30,26 @@ else
     echo "jq is already installed. Continuing..."
 fi
 
+# Function to print success messages
+print_success() {
+    echo -e "\e[32m✔ $1\e[0m"
+}
 
+# Function to print error messages
+print_error() {
+    echo -e "\e[31m✖ $1\e[0m"
+}
+
+# Function to print info messages
+print_info() {
+    echo -e "\e[34mℹ $1\e[0m"
+}
 
 # Initialize counter for metric subscriptions
 metric_subscriptions_count=0
 
 # Step 0: Create a user and get userId
-echo "Creating user: $userName"
+print_info "Creating user: $userName"
 userResponse=$(curl -s -X POST "${apiUrl}/users" \
     -H 'accept: application/json' \
     -H "Authorization: ${apiKey}" \
@@ -44,16 +57,15 @@ userResponse=$(curl -s -X POST "${apiUrl}/users" \
     -d "{\"users\": [{ \"userName\": \"$userName\" }]}")
 
 userId=$(echo "$userResponse" | jq -r '.data[0].id')
-echo "User created with userId: $userId"
-
 if [ -z "$userId" ] || [ "$userId" == "null" ]; then
-    echo "Failed to create user or extract userId."
+    print_error "Failed to create user or extract userId."
     exit 1
+else
+    print_success "User created with userId: $userId"
 fi
 
-
 # Fetching suggestions for metrics to subscribe
-echo "Fetching metrics for address: $address"
+print_info "Fetching metrics for address: $address"
 suggestionsResponse=$(curl -s -X GET "${apiUrl}/suggestions?addresses=${address}" -H "Authorization: ${apiKey}")
 
 # Process metrics and unique tokens
@@ -104,9 +116,31 @@ processUniqueTokens
 subscriptions_payload=$(printf ",%s" "${subscriptions[@]}")
 subscriptions_payload="[${subscriptions_payload:1}]"
 
-# Debug print to verify payload structure
-echo "Final Payload: $subscriptions_payload"
+# Creating subscriptions
+print_info "Creating subscriptions for user $userName..."
+createSubscriptionsResponse=$(curl -s -X POST "${apiUrl}/subscriptions" -H "accept: application/json" -H "Authorization: ${apiKey}" -d "{\"subscriptions\": $subscriptions_payload}")
 
-# Create subscriptions (ensure your API endpoint and method match your needs)
-# Uncomment the following curl command to execute subscription
-curl -X POST "${apiUrl}/subscriptions" -H "accept: application/json" -H "Authorization: ${apiKey}" -d "{\"subscriptions\": $subscriptions_payload}"
+subscriptionSuccess=$(echo "$createSubscriptionsResponse" | jq -r '.data | length')
+if [ "$subscriptionSuccess" -gt 0 ]; then
+    print_success "Successfully subscribed to $subscriptionSuccess metrics for address $address 🎉"
+else
+    print_error "Failed to create subscriptions. Please check your API key and network connectivity."
+    echo "Response was: $createSubscriptionsResponse"
+    exit 1
+fi
+
+# Execution time calculation
+end_time=$(date +%s)
+execution_time=$((end_time - start_time))
+print_info "Execution time: $execution_time seconds."
+
+# Final summary
+echo -e "\n\e[1mSummary:\e[0m"
+echo "-------------------------------"
+echo -e "User: \e[1m$userName\e[0m"
+echo -e "User ID: \e[1m$userId\e[0m"
+echo -e "Address: \e[1m$address\e[0m"
+echo -e "Metrics Subscribed: \e[1m$subscriptionSuccess\e[0m"
+echo -e "Execution Time: \e[1m$execution_time seconds\e[0m"
+echo "-------------------------------"
+echo -e "🚀 All set! Your metrics subscriptions are active."
