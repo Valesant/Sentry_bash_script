@@ -95,9 +95,7 @@ processUniqueTokens() {
     poolTokenAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.pool.tokenAddresses[]' | sort | uniq)
 
     # Determine unique token addresses not in wallet
-    uniqueTokenAddresses=$(echo "$poolTokenAddresses" | grep -vxF -f <(echo "$walletTokens"))
-
-    
+    uniqueTokenAddresses=$(echo "$poolTokenAddresses" | grep -vxF -f <(echo "$walletTokens") | tr '\n' ',' | sed 's/,$//')
     
 # Check if there are unique tokens to process
     if [ ! -z "$uniqueTokenAddresses" ]; then
@@ -105,7 +103,7 @@ processUniqueTokens() {
 
         # Fetch token details
         tokenDetails=$(curl -s -X GET "$apiUrl/tokens?chainId=eth&addresses=$uniqueTokenAddresses" -H "accept: application/json")
-
+   
         echo "tokenDetails: $tokenDetails"
 
 
