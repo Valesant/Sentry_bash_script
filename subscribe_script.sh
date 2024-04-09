@@ -110,14 +110,14 @@ execution_time=$((end_time - start_time))
 echo "Execution time: $execution_time seconds."
 
 # Final summary
-echo "\nSummary:"
+echo -e "\nSummary:"
 echo "-------------------------------"
 echo "👤 User: $userName"
 echo "🆔 User ID: $userId"
-echo "📍 Address: $address"
+echo "📍 Addresses: $address"
 echo "🔔 Alerts Subscribed: $subscriptionSuccess :"
 for type in "${!subscription_counts[@]}"; do
     echo "- $type: ${subscription_counts[$type]} alerts, threshold: ${!type}_threshold)"
 done
-echo "\n⏱ Execution Time: $execution_time seconds"
+echo -e "\n⏱ Execution Time: $execution_time seconds"
 
