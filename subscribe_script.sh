@@ -108,9 +108,13 @@ processUniqueTokens() {
         # Extract token addresses with "isTracked" set to true
         trackedTokenAddresses=$(echo "$tokenDetails" | jq -r '.data[] | select(.isTracked == true) | .address')
 
+        echo "trackedTokenAddresses: $trackedTokenAddresses"
+
         # Convert tracked token addresses to an array
         readarray -t trackedTokenAddressesArray <<< "$trackedTokenAddresses"
 
+        echo "{trackedTokenAddressesArray[@]}:${trackedTokenAddressesArray[@]}"
+        
         # Iterate over tracked token addresses array
         for tokenAddress in "${trackedTokenAddressesArray[@]}"; do
             if [ ! -z "$tokenAddress" ]; then
@@ -131,7 +135,13 @@ processUniqueTokens() {
 }
 
 processMetrics
+echo "subscriptions: $subscriptions"
+echo "subscription_counts: $subscription_counts"
+
 processUniqueTokens
+echo "subscriptions: $subscriptions"
+echo "subscription_counts: $subscription_counts"
+
 
 # Finalize subscriptions payload
 subscriptions_payload=$(printf ",%s" "${subscriptions[@]}")
