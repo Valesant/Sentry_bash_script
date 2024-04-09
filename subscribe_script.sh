@@ -72,9 +72,25 @@ processMetrics() {
 
 processMetrics
 
-# Finalize subscriptions payload
+# New section: Process Supported Assets for additional subscriptions
+processSupportedAssets() {
+    echo "$suggestionsResponse" | jq -c '.data.supportedAssets[]' | while read -r asset; do
+        tokenAddress=$(echo "$asset" | jq -r '.tokenAddress')
+        # Subscribe to total tvl and total supply for each supported asset
+        subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_tvl_${tokenAddress}\", \"threshold\": $token_total_tvl_threshold}")
+        subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_supply_${tokenAddress}\", \"threshold\": $token_total_supply_threshold}")
+    done
+}
+
+# Call the function to process supported assets
+processSupportedAssets
+
+# Continue with your script to finalize subscriptions_payload
 subscriptions_payload=$(printf ",%s" "${subscriptions[@]}")
 subscriptions_payload="[${subscriptions_payload:1}]"
+
+# Debug print to verify payload structure
+echo "Final Payload: $subscriptions_payload"
 
 # Creating subscriptions
 echo "📝 Creating subscriptions for user $userName..."
