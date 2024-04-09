@@ -52,64 +52,45 @@ if [ -z "$userId" ] || [ "$userId" == "null" ]; then
 fi
 
 
-# Fetching suggestions for metrics to subscribe
-echo "Fetching metrics for address: $address"
-response=$(curl -s -X GET "${apiUrl}/suggestions?addresses=${address}" -H "Authorization: ${apiKey}")
+# Debug print the fetched metrics response
+echo "Fetched metrics response: $metricsResponse"
 
-echo "Checking if metrics are present..."
-echo "$response" | jq '.data.metrics'
+# Initialize subscriptions payload
+subscriptionsPayload="{\"subscriptions\":["
 
+# Process each metric, determine the correct threshold, and add to the payload
+echo "$metricsResponse" | jq -c '.data.metrics[]' | while read metric; do
+    key=$(echo "$metric" | jq -r '.key')
+    type=$(echo "$metric" | jq -r '.type')
+    threshold=0
 
-# Subscribing to metrics based on thresholds
-echo "Preparing subscriptions..."
-subscriptions=()
-for row in $(echo "${response}" | jq -r '.data.metrics[] | @base64'); do
-    _jq() {
-     echo ${row} | base64 --decode | jq -r ${1}
-    }
-
-    metricKey=$(_jq '.key')
-    metricType=$(_jq '.type')
-    case $metricType in
-        token_total_tvl)
-            threshold=$token_total_tvl_threshold
-            ;;
-        token_total_supply)
-            threshold=$token_total_supply_threshold
-            ;;
-        pool_rate)
-            threshold=$pool_rate_threshold
-            ;;
-        pool_tvl)
-            threshold=$pool_tvl_threshold
-            ;;
-        *)
-            continue
-            ;;
+    # Select threshold based on metric type
+    case "$type" in
+        "token_total_tvl") threshold=$token_total_tvl_threshold ;;
+        "token_total_supply") threshold=$token_total_supply_threshold ;;
+        "pool_rate") threshold=$pool_rate_threshold ;;
+        "pool_tvl") threshold=$pool_tvl_threshold ;;
     esac
 
-    # Append subscription to array
-    subscriptions+=("{\"userId\":\"$userId\",\"metricKey\":\"$metricKey\",\"threshold\":$threshold}")
+    # Add subscription to payload
+    subscriptionsPayload+="{\"userId\":\"$userId\",\"metricKey\":\"$key\",\"threshold\":$threshold},"
+
+    # Debug print for each subscription added
+    echo "Added subscription for $key with threshold $threshold"
 done
 
-# Join array into a JSON array string
-subscriptions_json=$(printf ",%s" "${subscriptions[@]}")
-subscriptions_json="[${subscriptions_json:1}]"
+# Close the JSON array for subscriptions payload
+subscriptionsPayload="${subscriptionsPayload%,}]}"
 
-# Create subscriptions
-echo "Subscribing to metrics..."
-subscriptionResponse=$(curl -s -X POST "${apiUrl}/subscriptions" \
-         -H 'accept: application/json' \
-         -H "Authorization: Bearer ${apiKey}" \
-         -d "{\"subscriptions\": $subscriptions_json}")
-echo "Subscription response: "
-echo "$subscriptionResponse" | jq '.'
+# Debug print the final subscriptions payload
+echo "Final subscriptions payload: $subscriptionsPayload"
 
-# Execution time calculation
-end_time=$(date +%s)
-execution_time=$((end_time - start_time))
+# Step 3: Create subscriptions
+echo "Creating subscriptions..."
+subscriptionResponse=$(curl -s -X POST "$apiUrl/subscriptions" \
+    -H 'Content-Type: application/json' \
+    -H "Authorization: $apiKey" \
+    -d "$subscriptionsPayload")
 
-echo "Process completed."
-echo "Execution time: $execution_time seconds."
-echo "Number of metric keys subscribed: ${#subscriptions[@]}."
-echo "Reminder: The userId used for subscriptions was $userId."
+# Print subscription creation response
+echo "Subscription creation response: $subscriptionResponse"
