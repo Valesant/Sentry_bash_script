@@ -52,14 +52,18 @@ if [ -z "$userId" ] || [ "$userId" == "null" ]; then
 fi
 
 
+# Fetching suggestions for metrics to subscribe
+echo "Fetching metrics for address: $address"
+response=$(curl -s -X GET "${apiUrl}/suggestions?addresses=${address}" -H "Authorization: ${apiKey}")
+
 # Debug print the fetched metrics response
-echo "Fetched metrics response: $metricsResponse"
+echo "Fetched metrics response: $response"
 
 # Initialize subscriptions payload
 subscriptionsPayload="{\"subscriptions\":["
 
 # Process each metric, determine the correct threshold, and add to the payload
-echo "$metricsResponse" | jq -c '.data.metrics[]' | while read metric; do
+echo "$response" | jq -c '.data.metrics[]' | while read metric; do
     key=$(echo "$metric" | jq -r '.key')
     type=$(echo "$metric" | jq -r '.type')
     threshold=0
