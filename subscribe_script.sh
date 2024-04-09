@@ -86,8 +86,6 @@ processMetrics() {
 }
 
 processUniqueTokens() {
-    echo "Processing unique tokens not in wallet..."
-
     # Extract wallet tokens for exclusion
     walletTokens=$(echo "$suggestionsResponse" | jq -r '.data.supportedAssets[] | .tokenAddress' | sort | uniq)
 
@@ -103,19 +101,12 @@ processUniqueTokens() {
 
         # Fetch token details
         tokenDetails=$(curl -s -X GET "$apiUrl/tokens?chainId=eth&addresses=$uniqueTokenAddresses" -H "accept: application/json")
-   
-        echo "tokenDetails: $tokenDetails"
-
 
         # Extract token addresses with "isTracked" set to true
         trackedTokenAddresses=$(echo "$tokenDetails" | jq -r '.data[] | select(.isTracked == true) | .address')
 
-        echo "trackedTokenAddresses: $trackedTokenAddresses"
-
         # Convert tracked token addresses to an array
         readarray -t trackedTokenAddressesArray <<< "$trackedTokenAddresses"
-
-        echo "{trackedTokenAddressesArray[@]}:${trackedTokenAddressesArray[@]}"
         
         # Iterate over tracked token addresses array
         for tokenAddress in "${trackedTokenAddressesArray[@]}"; do
@@ -127,29 +118,22 @@ processUniqueTokens() {
                 # Subscribe to total supply for each unique token
                 subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_supply_${tokenAddress}\", \"threshold\": $token_total_supply_threshold}")
                 subscription_counts["token_total_supply"]=$((subscription_counts["token_total_supply"]+1))
-                
-                echo "Subscribed to total TVL and total supply metrics for $tokenAddress"
+
             fi
         done
     else
-        echo "No unique tokens to process."
+        echo -e ""
     fi
 }
 
 processMetrics
-echo "subscriptions: $subscriptions"
-echo "subscription_counts: $subscription_counts"
-
 processUniqueTokens
-echo "subscriptions: $subscriptions"
-echo "subscription_counts: $subscription_counts"
+
 
 
 # Finalize subscriptions payload
 subscriptions_payload=$(printf ",%s" "${subscriptions[@]}")
 subscriptions_payload="[${subscriptions_payload:1}]"
-
-echo "Final Payload: $subscriptions_payload"
 
 subscriptions_json=$(jq -n --argjson subs "$(printf "%s\n" "${subscriptions[@]}" | jq -s)" '$subs')
 
