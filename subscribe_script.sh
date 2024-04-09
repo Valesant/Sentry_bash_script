@@ -60,32 +60,38 @@ fi
 echo "🔍 Fetching metrics for address: $address"
 suggestionsResponse=$(curl -s -X GET "${apiUrl}/suggestions?addresses=${address}" -H "Authorization: ${apiKey}")
 
-# Process metrics and unique tokens
-subscriptions=()
-processMetrics() {
-    while read -r key type; do
-        threshold="${thresholds[$type]}"
-        subscription_counts["$type"]=$((subscription_counts["$type"]+1))
-        subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"$key\", \"threshold\": $threshold}")
-    done < <(echo $suggestionsResponse | jq -r '.data.metrics[] | "\(.key) \(.type)"')
+# Extracting unique tokens from pools that are not in the wallet
+extractUniquePoolTokens() {
+    # Extract wallet tokens for exclusion
+    walletTokens=$(echo "$suggestionsResponse" | jq -r '.data.supportedAssets[] | .tokenAddress' | sort | uniq)
+
+    # Extract all token addresses involved in pools
+    poolTokenAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.pool.tokenAddresses[]' | sort | uniq)
+
+    # Determine unique token addresses not in wallet
+    uniqueTokenAddresses=$(echo "$poolTokenAddresses" | grep -vxF -f <(echo "$walletTokens") | tr '\n' ' ')
+
+    echo "$uniqueTokenAddresses"
 }
 
-processMetrics
+# Updated section to include "Other Relevant Tokens to track"
+echo "🔄 Starting to process each supported and unique pool asset..."
+processSupportedAndUniquePoolAssets() {
+    supportedAssets=$(echo "$suggestionsResponse" | jq -c '.data.supportedAssets[]' | jq -r '.tokenAddress')
+    uniquePoolTokens=$(extractUniquePoolTokens)
+    combinedTokens="$supportedAssets $uniquePoolTokens"
 
-# New section: Process Supported Assets for additional subscriptions
-echo "🔄 Starting to process each supported asset..."
-processSupportedAssets() {
-    echo "$suggestionsResponse" | jq -c '.data.supportedAssets[]' | while read -r asset; do
-        tokenAddress=$(echo "$asset" | jq -r '.tokenAddress')
+    for tokenAddress in $combinedTokens; do
         echo "🪙 Processing Asset: $tokenAddress"
-        # Subscribe to total tvl and total supply for each supported asset
-        subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_tvl_${tokenAddress}\", \"threshold\": $token_total_tvl_threshold}")
-        subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_supply_${tokenAddress}\", \"threshold\": $token_total_supply_threshold}")
+        # Subscribe to total tvl and total supply for each unique token and supported asset
+        subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_tvl_${tokenAddress}\", \"threshold\": ${thresholds[token_total_tvl]} }")
+        subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_supply_${tokenAddress}\", \"threshold\": ${thresholds[token_total_supply]} }")
     done
 }
 
-# Call the function to process supported assets
-processSupportedAssets
+# Call the updated function to process both supported assets and unique pool tokens
+processSupportedAndUniquePoolAssets
+
 echo "📈 Subscriptions count after processing Supported Assets: ${#subscriptions[@]}"
 
 # Continue with your script to finalize subscriptions_payload
