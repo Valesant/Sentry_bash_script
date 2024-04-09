@@ -54,7 +54,11 @@ fi
 
 # Fetching suggestions for metrics to subscribe
 echo "Fetching metrics for address: $address"
-response=$(curl -s -X GET "${apiUrl}/suggestions?addresses=${address}" -H "Authorization: Bearer ${apiKey}")
+response=$(curl -s -X GET "${apiUrl}/suggestions?addresses=${address}" -H "Authorization: ${apiKey}")
+
+echo "Checking if metrics are present..."
+echo "$response" | jq '.data.metrics'
+
 
 # Subscribing to metrics based on thresholds
 echo "Preparing subscriptions..."
