@@ -97,13 +97,17 @@ processUniqueTokens() {
     # Determine unique token addresses not in wallet
     uniqueTokenAddresses=$(echo "$poolTokenAddresses" | grep -vxF -f <(echo "$walletTokens"))
 
-    echo "uniqueTokenAddresses: $uniqueTokenAddresses"
+    
     
 # Check if there are unique tokens to process
     if [ ! -z "$uniqueTokenAddresses" ]; then
-    echo "in if"
+        echo "uniqueTokenAddresses: $uniqueTokenAddresses"
+
         # Fetch token details
         tokenDetails=$(curl -s -X GET "$apiUrl/tokens?chainId=eth&addresses=$uniqueTokenAddresses" -H "accept: application/json")
+
+        echo "tokenDetails: $tokenDetails"
+
 
         # Extract token addresses with "isTracked" set to true
         trackedTokenAddresses=$(echo "$tokenDetails" | jq -r '.data[] | select(.isTracked == true) | .address')
