@@ -22,7 +22,7 @@ apiUrl="https://sentry.aleno.ai"
 start_time=$(date +%s)
 
 # Dependency check for jq
-if ! command -v jq &> /dev/null
+if ! command -v jq > /dev/null 2>&1
 then
     echo "⚙️ jq could not be found. Attempting to install jq..."
     sudo apt-get update
