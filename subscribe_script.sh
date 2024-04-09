@@ -30,22 +30,27 @@ else
     echo "jq is already installed. Continuing..."
 fi
 
-# Create user and get userId
+
+
+# Initialize counter for metric subscriptions
+metric_subscriptions_count=0
+
+# Step 0: Create a user and get userId
 echo "Creating user: $userName"
 userResponse=$(curl -s -X POST "${apiUrl}/users" \
     -H 'accept: application/json' \
-    -H "Authorization: Bearer ${apiKey}" \
+    -H "Authorization: ${apiKey}" \
     -H 'Content-Type: application/json' \
     -d "{\"users\": [{ \"userName\": \"$userName\" }]}")
 
 userId=$(echo "$userResponse" | jq -r '.data[0].id')
 echo "User created with userId: $userId"
 
-# Handle failure to create user or extract userId
 if [ -z "$userId" ] || [ "$userId" == "null" ]; then
     echo "Failed to create user or extract userId."
     exit 1
 fi
+
 
 # Fetching suggestions for metrics to subscribe
 echo "Fetching metrics for address: $address"
