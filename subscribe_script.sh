@@ -10,10 +10,12 @@ fi
 address="$1"
 userName="$2"
 apiKey="$3"
-token_total_tvl_threshold="$4"
-token_total_supply_threshold="$5"
-pool_rate_threshold="$6"
-pool_tvl_threshold="$7"
+declare -A thresholds=(
+    ["token_total_tvl"]="$4"
+    ["token_total_supply"]="$5"
+    ["pool_rate"]="$6"
+    ["pool_tvl"]="$7"
+    
 apiUrl="https://sentry.aleno.ai"
 
 # Start timer
@@ -62,25 +64,8 @@ suggestionsResponse=$(curl -s -X GET "${apiUrl}/suggestions?addresses=${address}
 subscriptions=()
 processMetrics() {
     while read -r key type; do
-        threshold=0
-        case "$type" in
-            "token_total_tvl")
-                threshold=$token_total_tvl_threshold
-                subscription_counts["token_total_tvl"]=$((subscription_counts["token_total_tvl"]+1))
-                ;;
-            "token_total_supply")
-                threshold=$token_total_supply_threshold
-                subscription_counts["token_total_supply"]=$((subscription_counts["token_total_supply"]+1))
-                ;;
-            "pool_tvl")
-                threshold=$pool_tvl_threshold
-                subscription_counts["pool_tvl"]=$((subscription_counts["pool_tvl"]+1))
-                ;;
-            "pool_rate")
-                threshold=$pool_rate_threshold
-                subscription_counts["pool_rate"]=$((subscription_counts["pool_rate"]+1))
-                ;;
-        esac
+        threshold="${thresholds[$type]}"
+        subscription_counts["$type"]=$((subscription_counts["$type"]+1))
         subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"$key\", \"threshold\": $threshold}")
     done < <(echo $suggestionsResponse | jq -r '.data.metrics[] | "\(.key) \(.type)"')
 }
