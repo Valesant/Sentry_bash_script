@@ -15,7 +15,7 @@ declare -A thresholds=(
     ["token_total_supply"]="$5"
     ["pool_rate"]="$6"
     ["pool_tvl"]="$7"
-    
+)
 apiUrl="https://sentry.aleno.ai"
 
 # Start timer
@@ -27,9 +27,9 @@ then
     echo "⚙️ jq could not be found. Attempting to install jq..."
     sudo apt-get update
     sudo apt-get install -y jq
-    echo "jq installed successfully."
+    echo "✅ jq installed successfully."
 else
-    echo "jq is already installed. Continuing..."
+    echo "✅ jq is already installed. Continuing..."
 fi
 
 # Initialize counters for metric subscriptions
@@ -41,7 +41,7 @@ declare -A subscription_counts=(
 )
 
 # Step 0: Create a user and get userId
-echo "Creating user: $userName"
+echo "👤 Creating user: $userName"
 userResponse=$(curl -s -X POST "${apiUrl}/users" \
     -H 'accept: application/json' \
     -H "Authorization: ${apiKey}" \
@@ -49,7 +49,7 @@ userResponse=$(curl -s -X POST "${apiUrl}/users" \
     -d "{\"users\": [{ \"userName\": \"$userName\" }]}")
 
 userId=$(echo "$userResponse" | jq -r '.data[0].id')
-echo "User created with userId: $userId"
+echo "🆔 User created with userId: $userId"
 
 if [ -z "$userId" ] || [ "$userId" == "null" ]; then
     echo "❌ Failed to create user or extract userId."
@@ -57,7 +57,7 @@ if [ -z "$userId" ] || [ "$userId" == "null" ]; then
 fi
 
 # Fetching suggestions for metrics to subscribe
-echo "Fetching metrics for address: $address"
+echo "🔍 Fetching metrics for address: $address"
 suggestionsResponse=$(curl -s -X GET "${apiUrl}/suggestions?addresses=${address}" -H "Authorization: ${apiKey}")
 
 # Process metrics and unique tokens
@@ -77,12 +77,12 @@ subscriptions_payload=$(printf ",%s" "${subscriptions[@]}")
 subscriptions_payload="[${subscriptions_payload:1}]"
 
 # Creating subscriptions
-echo "Creating subscriptions for user $userName..."
+echo "📝 Creating subscriptions for user $userName..."
 createSubscriptionsResponse=$(curl -s -X POST "${apiUrl}/subscriptions" -H "accept: application/json" -H "Authorization: ${apiKey}" -d "{\"subscriptions\": $subscriptions_payload}")
 
 subscriptionSuccess=$(echo "$createSubscriptionsResponse" | jq -r '.data | length')
 if [ "$subscriptionSuccess" -gt 0 ]; then
-    echo "Successfully subscribed to $subscriptionSuccess metrics for address $address"
+    echo "✅ Successfully subscribed to $subscriptionSuccess metrics for address $address"
 else
     echo "❌ Failed to create subscriptions. Please check your API key and network connectivity."
     echo "Response was: $createSubscriptionsResponse"
@@ -92,17 +92,16 @@ fi
 # Execution time calculation
 end_time=$(date +%s)
 execution_time=$((end_time - start_time))
-echo "Execution time: $execution_time seconds."
+echo "⏱ Execution time: $execution_time seconds."
 
 # Final summary
-echo -e "\nSummary:"
+echo "📊 Summary:"
 echo "-------------------------------"
 echo "👤 User: $userName"
 echo "🆔 User ID: $userId"
-echo "📍 Addresses: $address"
-echo "🔔 Alerts Subscribed: $subscriptionSuccess :"
+echo "📍 Address: $address"
+echo "📈 Metrics Subscribed: $subscriptionSuccess"
+echo "⏱ Execution Time: $execution_time seconds"
 for type in "${!subscription_counts[@]}"; do
-    echo "- $type: ${subscription_counts[$type]} alerts, threshold: ${!type}_threshold)"
+    echo "🔔 $type alerts: ${subscription_counts[$type]} alerts, threshold: ${thresholds[$type]}"
 done
-echo -e "\n⏱ Execution Time: $execution_time seconds"
-
