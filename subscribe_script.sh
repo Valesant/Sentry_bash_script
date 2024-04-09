@@ -1,72 +1,106 @@
 #!/bin/bash
 
 # Check for correct number of arguments
-if [ "$#" -ne 8 ]; then
-    echo "Usage: $0 <api_key> <user_name> <address> token_total_tvl_threshold=<value> token_total_supply_threshold=<value> pool_rate_threshold=<value> pool_tvl_threshold=<value>"
+if [ "$#" -ne 7 ]; then
+    echo "Usage: $0 address userName apiKey token_total_tvl_threshold token_total_supply_threshold pool_rate_threshold pool_tvl_threshold"
     exit 1
 fi
 
-apiKey=$1
-userName=$2
-address=$3
-# Parsing named arguments for thresholds
-shift 3 # Shift the first three arguments out of the way
-declare -A thresholds
-for arg in "$@"; do
-  key=$(echo $arg | cut -f1 -d=)
-  value=$(echo $arg | cut -f2 -d=)
-  thresholds[$key]=$value
-done
-
+# Assigning input arguments to variables
+address="$1"
+userName="$2"
+apiKey="$3"
+token_total_tvl_threshold="$4"
+token_total_supply_threshold="$5"
+pool_rate_threshold="$6"
+pool_tvl_threshold="$7"
 apiUrl="https://sentry.aleno.ai"
 
-# Dependency check and user creation omitted for brevity
+# Start timer
+start_time=$(date +%s)
 
-# Fetch suggestions
+# Dependency check for jq
+if ! command -v jq &> /dev/null
+then
+    echo "jq could not be found. Attempting to install jq..."
+    sudo apt-get update
+    sudo apt-get install -y jq
+    echo "jq installed successfully."
+else
+    echo "jq is already installed. Continuing..."
+fi
+
+# Create user and get userId
+echo "Creating user: $userName"
+userResponse=$(curl -s -X POST "${apiUrl}/users" \
+    -H 'accept: application/json' \
+    -H "Authorization: Bearer ${apiKey}" \
+    -H 'Content-Type: application/json' \
+    -d "{\"users\": [{ \"userName\": \"$userName\" }]}")
+
+userId=$(echo "$userResponse" | jq -r '.data[0].id')
+echo "User created with userId: $userId"
+
+# Handle failure to create user or extract userId
+if [ -z "$userId" ] || [ "$userId" == "null" ]; then
+    echo "Failed to create user or extract userId."
+    exit 1
+fi
+
+# Fetching suggestions for metrics to subscribe
 echo "Fetching metrics for address: $address"
-response=$(curl -s -X GET "${apiUrl}/suggestions?addresses=${address}" -H "Authorization: ${apiKey}")
+response=$(curl -s -X GET "${apiUrl}/suggestions?addresses=${address}" -H "Authorization: Bearer ${apiKey}")
 
+# Subscribing to metrics based on thresholds
+echo "Preparing subscriptions..."
 subscriptions=()
+for row in $(echo "${response}" | jq -r '.data.metrics[] | @base64'); do
+    _jq() {
+     echo ${row} | base64 --decode | jq -r ${1}
+    }
 
-metrics=$(echo "$response" | jq -c '.data.metrics[]')
-for metric in $metrics; do
-    metricKey=$(echo "$metric" | jq -r '.key')
-    metricType=$(echo "$metric" | jq -r '.type')
-    
-    # Determine the threshold based on metric type
+    metricKey=$(_jq '.key')
+    metricType=$(_jq '.type')
     case $metricType in
-        "token_total_tvl")
-            threshold=${thresholds["token_total_tvl_threshold"]}
+        token_total_tvl)
+            threshold=$token_total_tvl_threshold
             ;;
-        "token_total_supply")
-            threshold=${thresholds["token_total_supply_threshold"]}
+        token_total_supply)
+            threshold=$token_total_supply_threshold
             ;;
-        "pool_rate")
-            threshold=${thresholds["pool_rate_threshold"]}
+        pool_rate)
+            threshold=$pool_rate_threshold
             ;;
-        "pool_tvl")
-            threshold=${thresholds["pool_tvl_threshold"]}
+        pool_tvl)
+            threshold=$pool_tvl_threshold
             ;;
         *)
-            echo "Unknown metric type $metricType, skipping..."
             continue
             ;;
     esac
 
-    # Prepare subscription
-    subscription=$(jq -n --arg userId "$userId" --arg metricKey "$metricKey" --argjson threshold "$threshold" \
-        '{userId: $userId, metricKey: $metricKey, threshold: $threshold}')
-    subscriptions+=("$subscription")
+    # Append subscription to array
+    subscriptions+=("{\"userId\":\"$userId\",\"metricKey\":\"$metricKey\",\"threshold\":$threshold}")
 done
 
-# Convert array to JSON array string
-subscriptionsJson=$(jq -n --argjson subscriptions "$(echo ${subscriptions[@]} | jq -s '.')" '{$subscriptions}')
+# Join array into a JSON array string
+subscriptions_json=$(printf ",%s" "${subscriptions[@]}")
+subscriptions_json="[${subscriptions_json:1}]"
 
 # Create subscriptions
-echo "Creating subscriptions..."
+echo "Subscribing to metrics..."
 subscriptionResponse=$(curl -s -X POST "${apiUrl}/subscriptions" \
-    -H 'accept: application/json' \
-    -H "Authorization: ${apiKey}" \
-    -d "$subscriptionsJson")
+         -H 'accept: application/json' \
+         -H "Authorization: Bearer ${apiKey}" \
+         -d "{\"subscriptions\": $subscriptions_json}")
+echo "Subscription response: "
+echo "$subscriptionResponse" | jq '.'
 
-echo "Subscription response: $subscriptionResponse"
+# Execution time calculation
+end_time=$(date +%s)
+execution_time=$((end_time - start_time))
+
+echo "Process completed."
+echo "Execution time: $execution_time seconds."
+echo "Number of metric keys subscribed: ${#subscriptions[@]}."
+echo "Reminder: The userId used for subscriptions was $userId."
