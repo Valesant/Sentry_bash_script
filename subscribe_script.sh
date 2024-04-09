@@ -104,11 +104,11 @@ readarray -t uniqueTokenAddressesArray <<< "$uniqueTokenAddresses"
 for tokenAddress in "${uniqueTokenAddressesArray[@]}"; do
     if [ ! -z "$tokenAddress" ]; then
         # Subscribe to total TVL for each unique token
-        subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_tvl_${tokenAddress}\", \"threshold\": $token_total_tvl_threshold}}")
+        subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_tvl_${tokenAddress}\", \"threshold\": $token_total_tvl_threshold}")
         subscription_counts["token_total_tvl"]=$((subscription_counts["token_total_tvl"]+1))
         
         # Subscribe to total supply for each unique token
-        subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_supply_${tokenAddress}\", \"threshold\": $token_total_supply_threshold}}")
+        subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_supply_${tokenAddress}\", \"threshold\": $token_total_supply_threshold}")
         subscription_counts["token_total_supply"]=$((subscription_counts["token_total_supply"]+1))
         
         echo "Subscribed to total TVL and total supply metrics for $tokenAddress"
