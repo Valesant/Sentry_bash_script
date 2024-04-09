@@ -10,19 +10,17 @@ fi
 address="$1"
 userName="$2"
 apiKey="$3"
-declare -A thresholds=(
-    ["token_total_tvl"]="$4"
-    ["token_total_supply"]="$5"
-    ["pool_rate"]="$6"
-    ["pool_tvl"]="$7"
-)
+token_total_tvl_threshold="$4"
+token_total_supply_threshold="$5"
+pool_rate_threshold="$6"
+pool_tvl_threshold="$7"
 apiUrl="https://sentry.aleno.ai"
 
 # Start timer
 start_time=$(date +%s)
 
 # Dependency check for jq
-if ! command -v jq > /dev/null 2>&1
+if ! command -v jq &> /dev/null
 then
     echo "⚙️ jq could not be found. Attempting to install jq..."
     sudo apt-get update
@@ -60,46 +58,38 @@ fi
 echo "🔍 Fetching metrics for address: $address"
 suggestionsResponse=$(curl -s -X GET "${apiUrl}/suggestions?addresses=${address}" -H "Authorization: ${apiKey}")
 
-# Extracting unique tokens from pools that are not in the wallet
-extractUniquePoolTokens() {
-    # Extract wallet tokens for exclusion
-    walletTokens=$(echo "$suggestionsResponse" | jq -r '.data.supportedAssets[] | .tokenAddress' | sort | uniq)
-
-    # Extract all token addresses involved in pools
-    poolTokenAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.pool.tokenAddresses[]' | sort | uniq)
-
-    # Determine unique token addresses not in wallet
-    uniqueTokenAddresses=$(echo "$poolTokenAddresses" | grep -vxF -f <(echo "$walletTokens") | tr '\n' ' ')
-
-    echo "$uniqueTokenAddresses"
+# Process metrics and unique tokens
+subscriptions=()
+processMetrics() {
+    while read -r key type; do
+        threshold=0
+        case "$type" in
+            "token_total_tvl")
+                threshold=$token_total_tvl_threshold
+                subscription_counts["token_total_tvl"]=$((subscription_counts["token_total_tvl"]+1))
+                ;;
+            "token_total_supply")
+                threshold=$token_total_supply_threshold
+                subscription_counts["token_total_supply"]=$((subscription_counts["token_total_supply"]+1))
+                ;;
+            "pool_tvl")
+                threshold=$pool_tvl_threshold
+                subscription_counts["pool_tvl"]=$((subscription_counts["pool_tvl"]+1))
+                ;;
+            "pool_rate")
+                threshold=$pool_rate_threshold
+                subscription_counts["pool_rate"]=$((subscription_counts["pool_rate"]+1))
+                ;;
+        esac
+        subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"$key\", \"threshold\": $threshold}")
+    done < <(echo $suggestionsResponse | jq -r '.data.metrics[] | "\(.key) \(.type)"')
 }
 
-# Updated section to include "Other Relevant Tokens to track"
-echo "🔄 Starting to process each supported and unique pool asset..."
-processSupportedAndUniquePoolAssets() {
-    supportedAssets=$(echo "$suggestionsResponse" | jq -c '.data.supportedAssets[]' | jq -r '.tokenAddress')
-    uniquePoolTokens=$(extractUniquePoolTokens)
-    combinedTokens="$supportedAssets $uniquePoolTokens"
+processMetrics
 
-    for tokenAddress in $combinedTokens; do
-        echo "🪙 Processing Asset: $tokenAddress"
-        # Subscribe to total tvl and total supply for each unique token and supported asset
-        subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_tvl_${tokenAddress}\", \"threshold\": ${thresholds[token_total_tvl]} }")
-        subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_supply_${tokenAddress}\", \"threshold\": ${thresholds[token_total_supply]} }")
-    done
-}
-
-# Call the updated function to process both supported assets and unique pool tokens
-processSupportedAndUniquePoolAssets
-
-echo "📈 Subscriptions count after processing Supported Assets: ${#subscriptions[@]}"
-
-# Continue with your script to finalize subscriptions_payload
+# Finalize subscriptions payload
 subscriptions_payload=$(printf ",%s" "${subscriptions[@]}")
 subscriptions_payload="[${subscriptions_payload:1}]"
-
-# Debug print to verify payload structure
-echo "Final Payload: $subscriptions_payload"
 
 # Creating subscriptions
 echo "📝 Creating subscriptions for user $userName..."
@@ -128,5 +118,5 @@ echo "📍 Address: $address"
 echo "📈 Metrics Subscribed: $subscriptionSuccess"
 echo "⏱ Execution Time: $execution_time seconds"
 for type in "${!subscription_counts[@]}"; do
-    echo "🔔 $type alerts: ${subscription_counts[$type]} alerts, threshold: ${thresholds[$type]}"
+    echo "🔔 $type alerts: ${subscription_counts[$type]} (Threshold: ${!type}_threshold)"
 done
