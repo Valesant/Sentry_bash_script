@@ -85,7 +85,38 @@ processMetrics() {
     done < <(echo $suggestionsResponse | jq -r '.data.metrics[] | "\(.key) \(.type)"')
 }
 
+processUniqueTokens() {
+    echo "Processing unique tokens not in wallet..."
+
+    # Extract wallet tokens for exclusion
+    walletTokens=$(echo "$suggestionsResponse" | jq -r '.data.supportedAssets[] | .tokenAddress' | sort | uniq)
+
+    # Extract all token addresses involved in pools
+    poolTokenAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.pool.tokenAddresses[]' | sort | uniq)
+
+    # Determine unique token addresses not in wallet
+    uniqueTokenAddresses=$(echo "$poolTokenAddresses" | grep -vxF -f <(echo "$walletTokens"))
+
+    echo "Unique token addresses: $uniqueTokenAddresses"
+
+    # Loop through unique token addresses to subscribe to their metrics
+    echo "$uniqueTokenAddresses" | while read -r tokenAddress; do
+        if [ ! -z "$tokenAddress" ]; then
+            # Subscribe to total TVL for each unique token
+            subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_tvl_${tokenAddress}\", \"threshold\": $token_total_tvl_threshold}")
+            subscription_counts["token_total_tvl"]=$((subscription_counts["token_total_tvl"]+1))
+            
+            # Subscribe to total supply for each unique token
+            subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_supply_${tokenAddress}\", \"threshold\": $token_total_supply_threshold}")
+            subscription_counts["token_total_supply"]=$((subscription_counts["token_total_supply"]+1))
+            
+            echo "Subscribed to total TVL and total supply metrics for $tokenAddress"
+        fi
+    done
+}
+
 processMetrics
+processUniqueTokens
 
 # Finalize subscriptions payload
 subscriptions_payload=$(printf ",%s" "${subscriptions[@]}")
