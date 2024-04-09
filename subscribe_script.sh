@@ -10,20 +10,17 @@ fi
 address="$1"
 userName="$2"
 apiKey="$3"
-declare -A thresholds=(
-    ["token_total_tvl"]="$4"
-    ["token_total_supply"]="$5"
-    ["pool_rate"]="$6"
-    ["pool_tvl"]="$7"
-)
+token_total_tvl_threshold="$4"
+token_total_supply_threshold="$5"
+pool_rate_threshold="$6"
+pool_tvl_threshold="$7"
 apiUrl="https://sentry.aleno.ai"
 
 # Start timer
 start_time=$(date +%s)
 
 # Dependency check for jq
-if ! command -v jq > /dev/null 2>&1
-then
+if ! command -v jq > /dev/null 2>&1; then
     echo "⚙️ jq could not be found. Attempting to install jq..."
     sudo apt-get update
     sudo apt-get install -y jq
@@ -39,6 +36,9 @@ declare -A subscription_counts=(
     ["pool_rate"]=0
     ["pool_tvl"]=0
 )
+
+# Initialize array for subscriptions
+subscriptions=()
 
 # Step 0: Create a user and get userId
 echo "👤 Creating user: $userName"
@@ -60,37 +60,31 @@ fi
 echo "🔍 Fetching metrics for address: $address"
 suggestionsResponse=$(curl -s -X GET "${apiUrl}/suggestions?addresses=${address}" -H "Authorization: ${apiKey}")
 
-# Process metrics and unique tokens
-subscriptions=()
-processMetrics() {
-    while read -r key type; do
-        threshold="${thresholds[$type]}"
-        subscription_counts["$type"]=$((subscription_counts["$type"]+1))
-        subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"$key\", \"threshold\": $threshold}")
-    done < <(echo $suggestionsResponse | jq -r '.data.metrics[] | "\(.key) \(.type)"')
-}
+# Process metrics for subscriptions
+echo "$suggestionsResponse" | jq -r '.data.metrics[] | "\(.key) \(.type)"' | while read -r key type; do
+    threshold=0
+    case "$type" in
+        "token_total_tvl") threshold=$token_total_tvl_threshold ;;
+        "token_total_supply") threshold=$token_total_supply_threshold ;;
+        "pool_tvl") threshold=$pool_tvl_threshold ;;
+        "pool_rate") threshold=$pool_rate_threshold ;;
+    esac
+    subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"$key\", \"threshold\": $threshold}")
+    subscription_counts[$type]=$((subscription_counts[$type]+1))
+done
 
-processMetrics
+# Process supported assets for additional subscriptions
+echo "$suggestionsResponse" | jq -c '.data.supportedAssets[]' | while read -r asset; do
+    tokenAddress=$(echo "$asset" | jq -r '.tokenAddress')
+    subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_tvl_${tokenAddress}\", \"threshold\": $token_total_tvl_threshold}")
+    subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_supply_${tokenAddress}\", \"threshold\": $token_total_supply_threshold}")
+    subscription_counts["token_total_tvl"]=$((subscription_counts["token_total_tvl"]+1))
+    subscription_counts["token_total_supply"]=$((subscription_counts["token_total_supply"]+1))
+done
 
-# New section: Process Supported Assets for additional subscriptions
-processSupportedAssets() {
-    echo "$suggestionsResponse" | jq -c '.data.supportedAssets[]' | while read -r asset; do
-        tokenAddress=$(echo "$asset" | jq -r '.tokenAddress')
-        # Subscribe to total tvl and total supply for each supported asset
-        subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_tvl_${tokenAddress}\", \"threshold\": $token_total_tvl_threshold}")
-        subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_supply_${tokenAddress}\", \"threshold\": $token_total_supply_threshold}")
-    done
-}
-
-# Call the function to process supported assets
-processSupportedAssets
-
-# Continue with your script to finalize subscriptions_payload
+# Finalize subscriptions payload
 subscriptions_payload=$(printf ",%s" "${subscriptions[@]}")
 subscriptions_payload="[${subscriptions_payload:1}]"
-
-# Debug print to verify payload structure
-echo "Final Payload: $subscriptions_payload"
 
 # Creating subscriptions
 echo "📝 Creating subscriptions for user $userName..."
@@ -119,5 +113,5 @@ echo "📍 Address: $address"
 echo "📈 Metrics Subscribed: $subscriptionSuccess"
 echo "⏱ Execution Time: $execution_time seconds"
 for type in "${!subscription_counts[@]}"; do
-    echo "🔔 $type alerts: ${subscription_counts[$type]} alerts, threshold: ${thresholds[$type]}"
+    echo "🔔 $type alerts: ${subscription_counts[$type]} alerts, threshold: ${!type}_threshold"
 done
