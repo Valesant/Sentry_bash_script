@@ -28,57 +28,32 @@ for token in $walletTokens; do
     echo "$suggestionsResponse" | jq -r --arg token "$token" '.data.metrics[] | select(.info.token.address == $token and .info.pool == null) | "- \(.name)"'
 done
 
-#AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-echo "----------"
-echo "Other available tokens:"
-
-# Debugging the extraction of walletTokens
-echo "Wallet Tokens: $walletTokens"
-
-# Extracting unique token addresses from pools
-poolTokenAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.pool.tokenAddresses[]' | sort | uniq)
-echo "Pool Token Addresses: $poolTokenAddresses"
-
-# Filtering out wallet tokens and ensuring unique addresses
-uniqueTokenAddresses=$(echo "$poolTokenAddresses" | grep -v -f <(echo "$walletTokens") | tr '\n' ',')
-uniqueTokenAddresses=${uniqueTokenAddresses%,}
-echo "Unique Token Addresses: $uniqueTokenAddresses"
-
-# Making an API call if unique tokens exist
-if [ ! -z "$uniqueTokenAddresses" ]; then
-    tokenDetails=$(curl -s -X GET "$apiUrl/tokens?addresses=$uniqueTokenAddresses" -H "accept: application/json")
-    echo "Token Details: $tokenDetails" | jq .
-else
-    echo "No unique tokens to process."
-fi
-#AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 # Other Relevant Tokens
 echo -e "\n🌐 \e[1mOther Relevant Tokens to track:\e[0m"
 echo "-------------------------------"
 
-# Check if the metric contains pool data before proceeding
-if echo "$suggestionsResponse" | jq -e '.data.metrics[] | select(.info.pool != null)' >/dev/null; then
-    # If it does contain pool data, then proceed as normal
-    poolTokenAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.pool.tokenAddresses[]' | uniq)
+# Extract wallet tokens for exclusion
+walletTokens=$(echo "$suggestionsResponse" | jq -r '.data.supportedAssets[] | .tokenAddress' | sort | uniq)
 
-    # Filter out the wallet tokens from the pool token addresses and ensure unique addresses
-    uniqueTokenAddresses=$(echo "$poolTokenAddresses" | sort | uniq | grep -v -f <(echo "$walletTokens" | sort | uniq) | tr '\n' ',')
+# Extract all token addresses involved in pools
+poolTokenAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.pool.tokenAddresses[]' | sort | uniq)
 
-    # Trim the trailing comma
-    uniqueTokenAddresses=${uniqueTokenAddresses%,}
+# Determine unique token addresses not in wallet
+uniqueTokenAddresses=$(echo "$poolTokenAddresses" | grep -vxF -f <(echo "$walletTokens") | tr '\n' ',' | sed 's/,$//')
 
-    # If there are any unique tokens not in wallet, make a single API call
-    if [ ! -z "$uniqueTokenAddresses" ]; then
-        tokenDetails=$(curl -s -X GET "$apiUrl/tokens?addresses=$uniqueTokenAddresses" -H "accept: application/json")
+if [ ! -z "$uniqueTokenAddresses" ]; then
+    echo "Querying additional token details for: $uniqueTokenAddresses"
+    tokenDetails=$(curl -s -X GET "$apiUrl/tokens?chainId=eth&addresses=$uniqueTokenAddresses" -H "accept: application/json")
 
-        # For each tracked token, display its details
-        echo "$tokenDetails" | jq -r '.data[] | select(.isTracked == true) | "🪙 \(.name)\n- \(.symbol) total supply\n- \(.symbol) total tvl\n"'
-    else
-        echo "No unique tokens to process."
-    fi
+    # Debug: Print raw API response
+    echo "Raw Token Details: $tokenDetails"
+
+    # Display token information
+    echo "$tokenDetails" | jq -r '.data[] | select(.isTracked == true) | "\n🪙 \(.name)\n- \(.symbol) total tvl\n- \(.symbol) total supply"'
 else
-    echo "No pools with other relevant tokens were found."
+    echo "No unique tokens to process."
 fi
+
 
 
 # Pools and Associated Metrics
