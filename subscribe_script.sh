@@ -30,26 +30,16 @@ else
     echo "jq is already installed. Continuing..."
 fi
 
-# Function to print success messages
-print_success() {
-    echo -e "\e[32m✔ $1\e[0m"
-}
-
-# Function to print error messages
-print_error() {
-    echo -e "\e[31m✖ $1\e[0m"
-}
-
-# Function to print info messages
-print_info() {
-    echo -e "\e[34mℹ $1\e[0m"
-}
-
-# Initialize counter for metric subscriptions
-metric_subscriptions_count=0
+# Initialize counters for metric subscriptions
+declare -A subscription_counts=(
+    ["token_total_tvl"]=0
+    ["token_total_supply"]=0
+    ["pool_rate"]=0
+    ["pool_tvl"]=0
+)
 
 # Step 0: Create a user and get userId
-print_info "Creating user: $userName"
+echo "Creating user: $userName"
 userResponse=$(curl -s -X POST "${apiUrl}/users" \
     -H 'accept: application/json' \
     -H "Authorization: ${apiKey}" \
@@ -57,15 +47,15 @@ userResponse=$(curl -s -X POST "${apiUrl}/users" \
     -d "{\"users\": [{ \"userName\": \"$userName\" }]}")
 
 userId=$(echo "$userResponse" | jq -r '.data[0].id')
+echo "User created with userId: $userId"
+
 if [ -z "$userId" ] || [ "$userId" == "null" ]; then
-    print_error "Failed to create user or extract userId."
+    echo "Failed to create user or extract userId."
     exit 1
-else
-    print_success "User created with userId: $userId"
 fi
 
 # Fetching suggestions for metrics to subscribe
-print_info "Fetching metrics for address: $address"
+echo "Fetching metrics for address: $address"
 suggestionsResponse=$(curl -s -X GET "${apiUrl}/suggestions?addresses=${address}" -H "Authorization: ${apiKey}")
 
 # Process metrics and unique tokens
@@ -76,55 +66,40 @@ processMetrics() {
         case "$type" in
             "token_total_tvl")
                 threshold=$token_total_tvl_threshold
+                subscription_counts["token_total_tvl"]=$((subscription_counts["token_total_tvl"]+1))
                 ;;
             "token_total_supply")
                 threshold=$token_total_supply_threshold
+                subscription_counts["token_total_supply"]=$((subscription_counts["token_total_supply"]+1))
                 ;;
             "pool_tvl")
                 threshold=$pool_tvl_threshold
+                subscription_counts["pool_tvl"]=$((subscription_counts["pool_tvl"]+1))
                 ;;
             "pool_rate")
                 threshold=$pool_rate_threshold
+                subscription_counts["pool_rate"]=$((subscription_counts["pool_rate"]+1))
                 ;;
         esac
         subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"$key\", \"threshold\": $threshold}")
     done < <(echo $suggestionsResponse | jq -r '.data.metrics[] | "\(.key) \(.type)"')
 }
 
-processUniqueTokens() {
-    # Extract wallet tokens for exclusion
-    walletTokens=$(echo "$suggestionsResponse" | jq -r '.data.supportedAssets[] | .tokenAddress' | sort | uniq)
-    
-    # Extract all token addresses involved in pools
-    poolTokenAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.pool.tokenAddresses[]' | sort | uniq)
-    
-    # Determine unique token addresses not in wallet
-    uniqueTokenAddresses=$(echo "$poolTokenAddresses" | grep -vxF -f <(echo "$walletTokens") | tr '\n' ' ')
-    
-    for address in $uniqueTokenAddresses; do
-        # Subscribe to total tvl and total supply for each unique token
-        subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_tvl_${address}\", \"threshold\": $token_total_tvl_threshold}")
-        subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_supply_${address}\", \"threshold\": $token_total_supply_threshold}")
-    done
-}
-
-# Process metrics and unique tokens to build subscriptions
 processMetrics
-processUniqueTokens
 
 # Finalize subscriptions payload
 subscriptions_payload=$(printf ",%s" "${subscriptions[@]}")
 subscriptions_payload="[${subscriptions_payload:1}]"
 
 # Creating subscriptions
-print_info "Creating subscriptions for user $userName..."
+echo "Creating subscriptions for user $userName..."
 createSubscriptionsResponse=$(curl -s -X POST "${apiUrl}/subscriptions" -H "accept: application/json" -H "Authorization: ${apiKey}" -d "{\"subscriptions\": $subscriptions_payload}")
 
 subscriptionSuccess=$(echo "$createSubscriptionsResponse" | jq -r '.data | length')
 if [ "$subscriptionSuccess" -gt 0 ]; then
-    print_success "Successfully subscribed to $subscriptionSuccess metrics for address $address 🎉"
+    echo "Successfully subscribed to $subscriptionSuccess metrics for address $address"
 else
-    print_error "Failed to create subscriptions. Please check your API key and network connectivity."
+    echo "Failed to create subscriptions. Please check your API key and network connectivity."
     echo "Response was: $createSubscriptionsResponse"
     exit 1
 fi
@@ -132,15 +107,20 @@ fi
 # Execution time calculation
 end_time=$(date +%s)
 execution_time=$((end_time - start_time))
-print_info "Execution time: $execution_time seconds."
+echo "Execution time: $execution_time seconds."
 
 # Final summary
-echo -e "\n\e[1mSummary:\e[0m"
+echo "Summary:"
 echo "-------------------------------"
-echo -e "User: \e[1m$userName\e[0m"
-echo -e "User ID: \e[1m$userId\e[0m"
-echo -e "Address: \e[1m$address\e[0m"
-echo -e "Metrics Subscribed: \e[1m$subscriptionSuccess\e[0m"
-echo -e "Execution Time: \e[1m$execution_time seconds\e[0m"
+echo "User: $userName"
+echo "User ID: $userId"
+echo "Address: $address"
+echo "Metrics Subscribed: $subscriptionSuccess"
+echo "Execution Time: $execution_time seconds"
+echo "Subscriptions Summary:"
+for type in "${!subscription_counts[@]}"; do
+    threshold_variable="${type}_threshold"
+    echo "- $type: ${subscription_counts[$type]} (Threshold: ${!threshold_variable})"
+done
 echo "-------------------------------"
-echo -e "🚀 All set! Your metrics subscriptions are active."
+echo "All set! Your metrics subscriptions are active."
