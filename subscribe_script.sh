@@ -54,46 +54,59 @@ fi
 
 # Fetching suggestions for metrics to subscribe
 echo "Fetching metrics for address: $address"
-response=$(curl -s -X GET "${apiUrl}/suggestions?addresses=${address}" -H "Authorization: ${apiKey}")
+suggestionsResponse=$(curl -s -X GET "${apiUrl}/suggestions?addresses=${address}" -H "Authorization: ${apiKey}")
 
-# Debug print the fetched metrics response
-echo "Fetched metrics response: $response"
-
-#AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-#AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-# Parse the response and build the subscriptions payload
+# Process metrics and unique tokens
 subscriptions=()
-while read -r key type; do
-    threshold=0 # default
-    case "$type" in
-        "token_total_tvl")
-            threshold=$token_total_tvl_threshold
-            ;;
-        "token_total_supply")
-            threshold=$token_total_supply_threshold
-            ;;
-        "pool_tvl")
-            threshold=$pool_tvl_threshold
-            ;;
-        "pool_rate")
-            threshold=$pool_rate_threshold
-            ;;
-    esac
+processMetrics() {
+    while read -r key type; do
+        threshold=0
+        case "$type" in
+            "token_total_tvl")
+                threshold=$token_total_tvl_threshold
+                ;;
+            "token_total_supply")
+                threshold=$token_total_supply_threshold
+                ;;
+            "pool_tvl")
+                threshold=$pool_tvl_threshold
+                ;;
+            "pool_rate")
+                threshold=$pool_rate_threshold
+                ;;
+        esac
+        subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"$key\", \"threshold\": $threshold}")
+    done < <(echo $suggestionsResponse | jq -r '.data.metrics[] | "\(.key) \(.type)"')
+}
 
-    # Append to subscriptions array
-    subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"$key\", \"threshold\": $threshold}")
-done < <(echo $response | jq -r '.data.metrics[] | "\(.key) \(.type)"')
+processUniqueTokens() {
+    # Extract wallet tokens for exclusion
+    walletTokens=$(echo "$suggestionsResponse" | jq -r '.data.supportedAssets[] | .tokenAddress' | sort | uniq)
+    
+    # Extract all token addresses involved in pools
+    poolTokenAddresses=$(echo "$suggestionsResponse" | jq -r '.data.metrics[] | select(.info.pool != null) | .info.pool.tokenAddresses[]' | sort | uniq)
+    
+    # Determine unique token addresses not in wallet
+    uniqueTokenAddresses=$(echo "$poolTokenAddresses" | grep -vxF -f <(echo "$walletTokens") | tr '\n' ' ')
+    
+    for address in $uniqueTokenAddresses; do
+        # Subscribe to total tvl and total supply for each unique token
+        subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_tvl_${address}\", \"threshold\": $token_total_tvl_threshold}")
+        subscriptions+=("{\"userId\": \"$userId\", \"metricKey\": \"eth_token_total_supply_${address}\", \"threshold\": $token_total_supply_threshold}")
+    done
+}
 
-# Join array elements
+# Process metrics and unique tokens to build subscriptions
+processMetrics
+processUniqueTokens
+
+# Finalize subscriptions payload
 subscriptions_payload=$(printf ",%s" "${subscriptions[@]}")
 subscriptions_payload="[${subscriptions_payload:1}]"
 
-# Final payload
-final_payload="{\"subscriptions\": $subscriptions_payload}"
+# Debug print to verify payload structure
+echo "Final Payload: $subscriptions_payload"
 
-echo "Final Payload: $final_payload"
-
-# Use the final payload in the curl command to create subscriptions
-curl -X POST "${apiUrl}/subscriptions" -H "accept: application/json" -H "Authorization: ${apiKey}" -d "$final_payload"
-#AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-#AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+# Create subscriptions (ensure your API endpoint and method match your needs)
+# Uncomment the following curl command to execute subscription
+curl -X POST "${apiUrl}/subscriptions" -H "accept: application/json" -H "Authorization: ${apiKey}" -d "{\"subscriptions\": $subscriptions_payload}"
